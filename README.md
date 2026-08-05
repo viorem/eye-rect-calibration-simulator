@@ -1,5 +1,7 @@
 # Eye rectangle gate simulator
 
+**Live: https://viorem.github.io/eye-rect-calibration-simulator/**
+
 Single-file interactive simulator for the face-calibration width-axis gates, built to
 share the centring-vs-closeness argument with the team.
 
@@ -55,11 +57,22 @@ Relaxation widens `policyTol` but never `frameLimit` — the former is policy, t
 latter is geometry — so loosening the tolerance can never permit an out-of-frame
 eye rect. Whichever is smaller binds, and the UI names which one.
 
-## Deploying to Firebase Hosting
+## Deploying
 
-`firebase.json` is already configured (serves this directory, HTML set to
-`no-cache` so redeploys appear immediately). Two steps need your account, so run
-them yourself:
+Hosted on **GitHub Pages** from `main` at the repository root. To publish a change,
+just push — Pages rebuilds automatically, usually within a minute:
+
+```bash
+git add index.html && git commit -m "Update simulator" && git push
+```
+
+Note the repository is **public**, so the page and its parameter defaults are
+publicly reachable.
+
+### Firebase Hosting (alternative)
+
+`firebase.json` is configured as a fallback — serves this directory, `index.html`
+set to `no-cache` so redeploys appear immediately. It needs your Google account:
 
 ```bash
 npx firebase-tools login
@@ -69,10 +82,5 @@ npx firebase-tools login
 npx firebase-tools use --add
 ```
 
-`use --add` picks the Firebase project and writes `.firebaserc`. Then deploy:
-
-```bash
-npx firebase-tools deploy --only hosting
-```
-
-Using `npx` avoids a global install. Subsequent deploys are just the last command.
+`use --add` picks the project and writes `.firebaserc`. Then `npx firebase-tools
+deploy --only hosting`.
