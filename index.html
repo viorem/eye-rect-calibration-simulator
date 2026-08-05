@@ -1,0 +1,1127 @@
+<title>Eye Rect Calibration Simulator</title>
+
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+
+  :root {
+    --ground: #F6F7F9;
+    --panel: #FFFFFF;
+    --sunken: #EDEFF3;
+    --ink: #171C24;
+    --ink-soft: #39404C;
+    --rule: #D5D9E1;
+    --muted: #6D7688;
+    --accent: #C87A1E;
+    --accent-soft: rgba(200, 122, 30, 0.14);
+    --pass: #1F8355;
+    --pass-soft: rgba(31, 131, 85, 0.12);
+    --fail: #C13A28;
+    --fail-soft: rgba(193, 58, 40, 0.12);
+    --frame-bg: #E6E9EF;
+    --band: rgba(31, 131, 85, 0.13);
+    /* chart series tokens — validated separately from the UI accent */
+    --ser-proposed: #C87A1E;
+    --ser-current: #2F6DB5;
+    --shadow: 0 1px 2px rgba(23, 28, 36, .05), 0 6px 18px -12px rgba(23, 28, 36, .16);
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #0F1319; --panel: #161C25; --sunken: #10151C;
+      --ink: #E8EBF0; --ink-soft: #B6BDC9; --rule: #2A323E; --muted: #8B95A6;
+      --accent: #E39B3D; --accent-soft: rgba(227, 155, 61, 0.16);
+      --pass: #3FBA80; --pass-soft: rgba(63, 186, 128, 0.14);
+      --fail: #F0674F; --fail-soft: rgba(240, 103, 79, 0.14);
+      --frame-bg: #0A0E13; --band: rgba(63, 186, 128, 0.14);
+      --ser-proposed: #C4831F; --ser-current: #4189D2;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 8px 24px -14px rgba(0, 0, 0, .7);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0F1319; --panel: #161C25; --sunken: #10151C;
+    --ink: #E8EBF0; --ink-soft: #B6BDC9; --rule: #2A323E; --muted: #8B95A6;
+    --accent: #E39B3D; --accent-soft: rgba(227, 155, 61, 0.16);
+    --pass: #3FBA80; --pass-soft: rgba(63, 186, 128, 0.14);
+    --fail: #F0674F; --fail-soft: rgba(240, 103, 79, 0.14);
+    --frame-bg: #0A0E13; --band: rgba(63, 186, 128, 0.14);
+    --ser-proposed: #C4831F; --ser-current: #4189D2;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 8px 24px -14px rgba(0, 0, 0, .7);
+  }
+  :root[data-theme="light"] {
+    --ground: #F6F7F9; --panel: #FFFFFF; --sunken: #EDEFF3;
+    --ink: #171C24; --ink-soft: #39404C; --rule: #D5D9E1; --muted: #6D7688;
+    --accent: #C87A1E; --accent-soft: rgba(200, 122, 30, 0.14);
+    --pass: #1F8355; --pass-soft: rgba(31, 131, 85, 0.12);
+    --fail: #C13A28; --fail-soft: rgba(193, 58, 40, 0.12);
+    --frame-bg: #E6E9EF; --band: rgba(31, 131, 85, 0.13);
+    --ser-proposed: #C87A1E; --ser-current: #2F6DB5;
+    --shadow: 0 1px 2px rgba(23, 28, 36, .05), 0 6px 18px -12px rgba(23, 28, 36, .16);
+  }
+
+  body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--sans); line-height: 1.45; -webkit-font-smoothing: antialiased; }
+
+  .wrap {
+    height: 100dvh; overflow: hidden;
+    padding: 10px 14px 12px;
+    display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: 9px;
+    max-width: 1400px; margin: 0 auto;
+  }
+
+  header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .titles { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .eyebrow { font-family: var(--mono); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+  h1 { font-family: var(--mono); font-size: clamp(15px, 1.7vw, 19px); font-weight: 600; letter-spacing: -.01em; }
+
+  .verdict { display: flex; align-items: center; gap: 11px; padding: 7px 13px; border-radius: 4px; border: 1px solid; flex: none; max-width: 620px; }
+  .verdict.pass { border-color: var(--pass); background: var(--pass-soft); }
+  .verdict.fail { border-color: var(--fail); background: var(--fail-soft); }
+  .verdict.hidden { visibility: hidden; }
+  .verdict .light { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .verdict.pass .light { background: var(--pass); }
+  .verdict.fail .light { background: var(--fail); }
+  .verdict .txt { display: flex; flex-direction: column; min-width: 0; }
+  .verdict strong { font-family: var(--mono); font-size: 12.5px; letter-spacing: .1em; line-height: 1.3; }
+  .verdict.pass strong { color: var(--pass); }
+  .verdict.fail strong { color: var(--fail); }
+  .verdict small { font-size: 11.5px; color: var(--ink-soft); line-height: 1.35; }
+
+  /* ---------- tabs ---------- */
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--rule); }
+  .tabs button {
+    font-family: var(--mono); font-size: 11px; letter-spacing: .04em;
+    padding: 6px 13px; cursor: pointer; color: var(--muted);
+    background: transparent; border: 1px solid transparent; border-bottom: none;
+    border-radius: 3px 3px 0 0; margin-bottom: -1px;
+  }
+  .tabs button:hover { color: var(--ink); }
+  .tabs button[aria-selected="true"] {
+    color: var(--ink); background: var(--panel);
+    border-color: var(--rule); border-bottom: 1px solid var(--panel);
+  }
+  .tabs button .n { color: var(--muted); margin-right: 6px; }
+
+  .panels { min-height: 0; }
+  .panel { display: none; height: 100%; min-height: 0; }
+  .panel.active { display: grid; }
+  .rig { grid-template-columns: auto minmax(230px, 1fr) minmax(240px, 292px); gap: 13px; min-height: 0; }
+  .col { display: flex; flex-direction: column; gap: 9px; min-height: 0; min-width: 0; }
+
+  /* ---------- stage ---------- */
+  .stage { display: flex; flex-direction: column; gap: 6px; min-height: 0; width: fit-content; }
+  .frame { position: relative; background: var(--frame-bg); border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; touch-action: none; transition: border-color .16s ease, box-shadow .16s ease; }
+  .frame.is-fail { border-color: var(--fail); box-shadow: 0 0 0 2px var(--fail-soft); }
+  .frame.is-pass { border-color: var(--pass); box-shadow: 0 0 0 2px var(--pass-soft); }
+
+  .grid-lines { position: absolute; inset: 0; opacity: .45; }
+  .grid-lines span { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--rule); }
+  .dead { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(-45deg, transparent 0 4px, rgba(193, 58, 40, .16) 4px 5px); }
+  .band { position: absolute; top: 0; bottom: 0; background: var(--band); border-left: 1px dashed var(--pass); border-right: 1px dashed var(--pass); }
+  .band.policy { background: none; border-left: 1px dotted var(--muted); border-right: 1px dotted var(--muted); }
+  .center-line { position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: var(--muted); opacity: .5; }
+
+  .erect { position: absolute; border: 2px solid var(--accent); background: var(--accent-soft); color: var(--accent); cursor: grab; display: flex; align-items: center; justify-content: center; }
+  .erect.is-fail { border-color: var(--fail); background: var(--fail-soft); color: var(--fail); }
+  .erect.dragging { cursor: grabbing; }
+  .erect .tag { font-family: var(--mono); font-size: 9.5px; letter-spacing: .03em; color: var(--ink); background: var(--panel); border: 1px solid currentColor; border-radius: 2px; padding: 0 4px; white-space: nowrap; pointer-events: none; }
+  .handle { position: absolute; top: 0; bottom: 0; width: 14px; cursor: ew-resize; touch-action: none; }
+  .handle::after { content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 3px; height: 20px; background: currentColor; border-radius: 2px; }
+  .handle.left { left: -8px; }
+  .handle.right { right: -8px; }
+
+  /* midpoint tick — the thing the proposed rule actually measures */
+  .ctick { position: absolute; width: 1px; top: 18%; bottom: 18%; background: var(--accent); }
+  .ctick::after { content: ""; position: absolute; top: -3px; left: -3px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+  .ctick.is-fail, .ctick.is-fail::after { background: var(--fail); }
+  .dxbar { position: absolute; height: 2px; background: var(--accent); opacity: .75; }
+  .dxbar.is-fail { background: var(--fail); }
+  .dxlabel { position: absolute; transform: translateX(-50%); font-family: var(--mono); font-size: 9px; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 2px; padding: 0 4px; white-space: nowrap; }
+  /* names the green band in place, so "effective window" is defined where it is seen */
+  .bandlabel {
+    position: absolute; top: 4px; transform: translateX(-50%);
+    font-family: var(--mono); font-size: 8.5px; letter-spacing: .02em; text-align: center;
+    color: var(--pass); background: var(--panel); border: 1px solid var(--pass);
+    border-radius: 2px; padding: 0 4px; white-space: nowrap; pointer-events: none;
+  }
+
+  .caliper { position: absolute; height: 0; border-top: 2px solid currentColor; color: var(--accent); }
+  .caliper.min { border-top-width: 1px; color: var(--muted); }
+  .caliper .cap { position: absolute; top: -6px; width: 2px; height: 13px; background: currentColor; }
+  .caliper.min .cap { top: -4px; height: 9px; width: 1px; }
+  .caliper .cap.l { left: 0; }
+  .caliper .cap.r { right: 0; }
+  .caliper .cl { position: absolute; top: 5px; left: 50%; transform: translateX(-50%); font-family: var(--mono); font-size: 9px; letter-spacing: .02em; white-space: nowrap; color: var(--ink); background: var(--panel); border: 1px solid currentColor; border-radius: 2px; padding: 0 4px; }
+  .caliper.eff.is-fail { color: var(--fail); }
+
+  .ruler { position: relative; height: 20px; border-top: 1px solid var(--rule); font-family: var(--mono); font-size: 9px; color: var(--muted); }
+  .ruler i { position: absolute; top: 0; width: 1px; height: 4px; background: var(--rule); }
+  .ruler b { position: absolute; top: 5px; transform: translateX(-50%); font-weight: 400; }
+
+  .legend { font-family: var(--mono); font-size: 9.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); display: flex; gap: 10px; flex-wrap: wrap; }
+  .legend span { display: inline-flex; align-items: center; gap: 4px; }
+  .swatch { width: 9px; height: 9px; border-radius: 2px; border: 1.5px solid; flex: none; }
+
+  /* ---------- cards ---------- */
+  .card { background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; box-shadow: var(--shadow); display: flex; flex-direction: column; min-height: 0; flex: 0 0 auto; }
+  .card.grow { flex: 1 1 auto; }
+  .card > h2 { font-family: var(--mono); font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-weight: 500; padding: 6px 11px; border-bottom: 1px solid var(--rule); flex: none; }
+  .card-body { padding: 9px 11px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; min-height: 0; }
+
+  .check { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 6px 0; border-top: 1px solid var(--rule); align-items: baseline; }
+  .check:first-child { border-top: none; padding-top: 0; }
+  .check .name { font-family: var(--mono); font-size: 11.5px; }
+  .check .expr { grid-column: 1; font-family: var(--mono); font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; overflow-x: auto; white-space: nowrap; }
+  .pill { grid-column: 2; grid-row: 1 / span 2; align-self: center; justify-self: end; font-family: var(--mono); font-size: 9px; letter-spacing: .1em; padding: 2px 6px; border-radius: 2px; border: 1px solid; }
+  .pill.pass { color: var(--pass); border-color: var(--pass); background: var(--pass-soft); }
+  .pill.fail { color: var(--fail); border-color: var(--fail); background: var(--fail-soft); }
+
+  .readout { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; }
+  .readout div { background: var(--panel); padding: 6px 9px; display: flex; flex-direction: column; }
+  .readout dt { font-family: var(--mono); font-size: 8.5px; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+  .readout dd { font-family: var(--mono); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .readout dd.bind { font-size: 10.5px; color: var(--ink-soft); }
+
+  .ctrl { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; align-items: center; }
+  .ctrl .label { font-family: var(--mono); font-size: 11px; }
+  .ctrl .label i { font-style: normal; color: var(--muted); font-size: 10px; }
+  .ctrl input[type="number"] { width: 74px; font-family: var(--mono); font-size: 11.5px; font-variant-numeric: tabular-nums; text-align: right; padding: 3px 6px; color: var(--ink); background: var(--sunken); border: 1px solid var(--rule); border-radius: 3px; }
+  .ctrl input[type="range"] { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); height: 14px; margin: 0; }
+  input:focus-visible, button:focus-visible, .erect:focus-visible, .handle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .group { display: flex; flex-direction: column; gap: 8px; }
+  .group + .group { border-top: 1px solid var(--rule); padding-top: 9px; }
+  .group > h3 { font-family: var(--mono); font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .toggle-row .meta { display: flex; flex-direction: column; min-width: 0; }
+  .toggle-row .meta span { font-family: var(--mono); font-size: 11px; }
+  .toggle-row .meta small { font-size: 10.5px; color: var(--muted); }
+  button.toggle { position: relative; flex: none; width: 42px; height: 22px; border-radius: 11px; background: var(--sunken); border: 1px solid var(--rule); cursor: pointer; transition: background .16s ease, border-color .16s ease; }
+  button.toggle::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--muted); transition: transform .16s ease, background .16s ease; }
+  button.toggle[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+  button.toggle[aria-pressed="true"]::after { transform: translateX(20px); background: var(--accent); }
+
+  /* segmented control */
+  .seg { display: flex; gap: 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; }
+  .seg button {
+    flex: 1 1 0; min-width: 0; cursor: pointer;
+    font-family: var(--mono); font-size: 10.5px; line-height: 1.25;
+    padding: 4px 6px; color: var(--muted); background: var(--sunken);
+    border: none; border-left: 1px solid var(--rule);
+    display: flex; flex-direction: column; align-items: center; gap: 1px;
+  }
+  .seg button:first-child { border-left: none; }
+  .seg button span { font-size: 8.5px; letter-spacing: .06em; text-transform: uppercase; opacity: .8; }
+  .seg button[aria-pressed="true"] { color: var(--ink); background: var(--accent-soft); box-shadow: inset 0 -2px 0 var(--accent); }
+  .seg button:hover { color: var(--ink); }
+
+  .presets { display: flex; flex-wrap: wrap; gap: 5px; }
+  .presets button { font-family: var(--mono); font-size: 10px; letter-spacing: .03em; padding: 3px 7px; border-radius: 3px; cursor: pointer; color: var(--ink-soft); background: var(--sunken); border: 1px solid var(--rule); }
+  .presets button:hover { color: var(--ink); border-color: var(--muted); }
+
+  /* flex: none matters — overflow-x:auto zeroes this element's automatic minimum
+     size, so as a flex item it would otherwise be squeezed and clip its last lines */
+  .rules { flex: 0 0 auto; font-family: var(--mono); font-size: 9.5px; color: var(--ink-soft); display: flex; flex-direction: column; gap: 2px; overflow-x: auto; }
+  .rules span.key { color: var(--ink); }
+  .rules span { white-space: nowrap; }
+  .rules span.dim { color: var(--muted); }
+  .note { font-size: 10.5px; color: var(--muted); }
+  .note b { color: var(--ink-soft); font-weight: 600; }
+
+  /* ---------- compare tab ---------- */
+  #panelC { grid-template-columns: minmax(0, 1fr) minmax(260px, 320px); gap: 13px; }
+  /* the canvas is absolutely positioned, so the wrapper needs flex height of its own */
+  #panelC .card-body { flex: 1 1 auto; }
+  .chartwrap { position: relative; flex: 1 1 auto; min-height: 150px; }
+  .chartwrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .tip {
+    position: absolute; pointer-events: none; opacity: 0; transition: opacity .1s ease;
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 3px;
+    box-shadow: var(--shadow); padding: 5px 7px;
+    font-family: var(--mono); font-size: 10px; font-variant-numeric: tabular-nums;
+    white-space: nowrap; z-index: 5;
+  }
+  .tip.on { opacity: 1; }
+  .tip .k { color: var(--muted); }
+  .tip .row { display: flex; align-items: center; gap: 5px; }
+  .tip .dot { width: 7px; height: 7px; border-radius: 2px; flex: none; }
+  table.cmp { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 10px; font-variant-numeric: tabular-nums; }
+  table.cmp th, table.cmp td { text-align: right; padding: 3px 4px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+  table.cmp th { color: var(--muted); font-weight: 500; font-size: 8.5px; letter-spacing: .07em; text-transform: uppercase; }
+  table.cmp td:first-child, table.cmp th:first-child { text-align: left; }
+  table.cmp tbody tr:last-child td { border-bottom: none; }
+  .keyline { display: inline-block; width: 11px; height: 3px; border-radius: 1px; vertical-align: middle; margin-right: 4px; }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+  @media (max-width: 900px) {
+    .wrap { height: auto; overflow: visible; grid-template-rows: none; }
+    .rig, #panelC { grid-template-columns: minmax(0, 1fr); }
+    .stage { width: 100%; }
+    .frame { width: 100% !important; height: auto !important; aspect-ratio: 1080 / 1920; max-width: 320px; }
+    .card-body { overflow: visible; }
+    .chartwrap { height: 320px; }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="titles">
+      <div class="eyebrow">Face calibration · width axis · 1080 × 1920</div>
+      <h1>Eye rectangle gate simulator</h1>
+    </div>
+    <div class="verdict" id="verdict">
+      <span class="light"></span>
+      <span class="txt">
+        <strong id="verdictLabel">PASS</strong>
+        <small id="verdictDetail">All width-axis checks satisfied.</small>
+      </span>
+    </div>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button role="tab" id="tabA" aria-selected="true" aria-controls="panelA"><span class="n">A</span>Current rule</button>
+    <button role="tab" id="tabB" aria-selected="false" aria-controls="panelB"><span class="n">B</span>Proposed: centre + distance</button>
+    <button role="tab" id="tabC" aria-selected="false" aria-controls="panelC"><span class="n">C</span>Compare</button>
+  </div>
+
+  <div class="panels" id="panels">
+    <!-- ============ TAB A ============ -->
+    <div class="panel rig active" id="panelA" role="tabpanel" aria-labelledby="tabA">
+      <div class="stage" id="aStage"></div>
+
+      <div class="col">
+        <div class="card"><h2>Checks</h2><div class="card-body"><div id="aLedger"></div></div></div>
+        <div class="card">
+          <h2>Derived</h2>
+          <div class="card-body">
+            <dl class="readout">
+              <div><dt>expectedXOffset</dt><dd id="aExpected">340</dd></div>
+              <div><dt>eff. maxOuter</dt><dd id="aOuter">975</dd></div>
+              <div><dt>allowed eRect_x</dt><dd id="aRange">68 – 408</dd></div>
+              <div><dt>eRect centre</dt><dd id="aCentre">540</dd></div>
+              <div><dt>left dead zone</dt><dd id="aDeadLVal">68</dd></div>
+              <div><dt>right dead zone</dt><dd id="aDeadRVal">272</dd></div>
+            </dl>
+          </div>
+        </div>
+        <div class="card grow">
+          <h2 id="aRulesTitle">Rules as implemented</h2>
+          <div class="card-body">
+            <div class="rules" id="aRules"></div>
+            <p class="note" id="aRulesNote"></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="card grow">
+          <h2>Parameters</h2>
+          <div class="card-body">
+            <div class="group">
+              <h3>Thresholds</h3>
+              <label class="ctrl">
+                <span class="label">maxOuterDistance <i>px</i></span>
+                <input type="number" id="numOuter" min="50" max="1080" step="1" value="750">
+                <input type="range" id="rngOuter" min="50" max="1080" step="1" value="750" aria-label="maxOuterDistance">
+              </label>
+              <label class="ctrl">
+                <span class="label">maxOffsetRatio <i>0–1</i></span>
+                <input type="number" id="numRatio" min="0" max="1" step="0.01" value="0.2">
+                <input type="range" id="rngRatio" min="0" max="1" step="0.01" value="0.2" aria-label="maxOffsetRatio">
+              </label>
+            </div>
+            <div class="group">
+              <h3>Left bound</h3>
+              <div class="seg" role="group" aria-label="Left bound formula">
+                <button type="button" id="modeImpl" aria-pressed="true">× r <span>as shipped</span></button>
+                <button type="button" id="modeIntended" aria-pressed="false">× (1 − r) <span>likely intent</span></button>
+              </div>
+              <p class="note" id="aModeNote"></p>
+            </div>
+            <div class="group" id="aRelaxGroup"></div>
+            <div class="group" id="aErectGroup"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ TAB B ============ -->
+    <div class="panel rig" id="panelB" role="tabpanel" aria-labelledby="tabB">
+      <div class="stage" id="bStage"></div>
+
+      <div class="col">
+        <div class="card"><h2>Checks</h2><div class="card-body"><div id="bLedger"></div></div></div>
+        <div class="card">
+          <h2>Derived</h2>
+          <div class="card-body">
+            <dl class="readout">
+              <div><dt>eRect midpoint</dt><dd id="bCentre">540</dd></div>
+              <div><dt>offset dx</dt><dd id="bDx">0</dd></div>
+              <div><dt>policy tolerance</dt><dd id="bPolicy">±197</dd></div>
+              <div><dt>frame limit</dt><dd id="bFrameLimit">±340</dd></div>
+              <div><dt>effective window</dt><dd id="bWindow">343 – 737</dd></div>
+              <div><dt>binding</dt><dd class="bind" id="bBind">policy</dd></div>
+            </dl>
+          </div>
+        </div>
+        <div class="card grow">
+          <h2>Rules as implemented</h2>
+          <div class="card-body">
+            <div class="rules">
+              <span>midpoint c = eRect_x + eRect_width / 2</span>
+              <span>dx = c − 540 <span class="dim">(540 = 1080 / 2, the frame centre)</span></span>
+              <span>policyTol = centreTolerance × 1080 × (1 + relaxation)</span>
+              <span>frameLimit = (1080 − eRect_width) / 2</span>
+              <span class="key">effectiveWindow = 540 ± min(policyTol, frameLimit)</span>
+              <span>FAIL if eRect_width &gt; maxOuterDistance × (1 + relaxation)</span>
+              <span>FAIL if eRect_width &lt; minOuterDistance × (1 − relaxation)</span>
+              <span>FAIL if |dx| &gt; policyTol</span>
+              <span>FAIL if |dx| &gt; frameLimit</span>
+            </div>
+            <p class="note"><b>The effective window</b> — the green band, labelled on the frame — is where the midpoint must land to clear <i>both</i> checks. Dotted lines are policyTol alone; outside the band means the frame edge is clipping it.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="card grow">
+          <h2>Parameters</h2>
+          <div class="card-body">
+            <div class="group">
+              <h3>Distance</h3>
+              <label class="ctrl">
+                <span class="label">maxOuterDistance <i>px, too close</i></span>
+                <input type="number" id="numOuter2" min="50" max="1080" step="1" value="750">
+                <input type="range" id="rngOuter2" min="50" max="1080" step="1" value="750" aria-label="maxOuterDistance">
+              </label>
+              <label class="ctrl">
+                <span class="label">minOuterDistance <i>px, too far</i></span>
+                <input type="number" id="numMinOuter" min="20" max="1080" step="1" value="250">
+                <input type="range" id="rngMinOuter" min="20" max="1080" step="1" value="250" aria-label="minOuterDistance">
+              </label>
+            </div>
+            <div class="group">
+              <h3>Centring</h3>
+              <label class="ctrl">
+                <span class="label">centreTolerance <i id="bTolPx">× 1080 = ±151 px</i></span>
+                <input type="number" id="numTol" min="0" max="0.5" step="0.005" value="0.14">
+                <input type="range" id="rngTol" min="0" max="0.5" step="0.005" value="0.14" aria-label="centreTolerance">
+              </label>
+            </div>
+            <div class="group" id="bRelaxGroup"></div>
+            <div class="group" id="bErectGroup"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ TAB C ============ -->
+    <div class="panel" id="panelC" role="tabpanel" aria-labelledby="tabC">
+      <div class="card grow" style="min-width:0">
+        <h2>Allowed centring window vs face closeness</h2>
+        <div class="card-body" style="gap:6px">
+          <div class="legend" style="font-size:10px">
+            <span><i class="keyline" style="background:var(--ser-current)"></i>As shipped</span>
+            <span><i class="keyline" style="background:repeating-linear-gradient(90deg, var(--ser-current) 0 5px, transparent 5px 9px)"></i>As likely intended</span>
+            <span><i class="keyline" style="background:var(--ser-proposed)"></i>Proposed</span>
+            <span style="text-transform:none; letter-spacing:0; margin-left:auto; color:var(--muted)">hover for values at any width</span>
+          </div>
+          <div class="chartwrap" id="chartWrap">
+            <canvas id="chart"></canvas>
+            <div class="tip" id="chartTip"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="card">
+          <h2>Reading it</h2>
+          <div class="card-body">
+            <p class="note">Vertical axis is how far the eye-rect midpoint may sit from frame centre (540) before the gate fails. Horizontal axis is <code>eRect_width</code> — further right means the face is closer to the camera.</p>
+            <p class="note"><b>As shipped</b> sits asymmetrically around zero — more room to drift left than right at every distance — and narrows to a point as the face approaches the frame width.</p>
+            <p class="note"><b>As likely intended</b> (dashed) is the same formula with the left bound mirrored, <code>× (1 − r)</code>. It is symmetric, but <b>stricter</b> than the shipped build, and it still collapses with closeness.</p>
+            <p class="note">The <b>proposed rule</b> is flat and symmetric until the frame edge physically intervenes, then tapers for geometric reasons only.</p>
+          </div>
+        </div>
+        <div class="card grow">
+          <h2>Allowed offset from centre</h2>
+          <div class="card-body">
+            <table class="cmp">
+              <thead>
+                <tr><th>eRect_w</th><th>ship L</th><th>ship R</th><th>intended</th><th>proposed</th></tr>
+              </thead>
+              <tbody id="cmpBody"></tbody>
+            </table>
+            <p class="note">Negative is left of centre. Note the intended column equals <b>ship R</b> mirrored — correcting the slip removes left-side latitude rather than adding it, so pass rates would tighten if r is not re-tuned.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const FRAME_W = 1080, CENTRE = FRAME_W / 2, ASPECT = 1080 / 1920;
+
+  /* Geometry and relaxation are shared across tabs, so flipping between models
+     judges the identical situation. Model-specific thresholds are separate. */
+  const state = {
+    x: 340, w: 400,
+    relax: 0.3, relaxOn: true,
+    maxOuter: 750,          // shared by both models
+    ratio: 0.2,             // model A only
+    aMode: "impl",          // "impl" = as shipped, "intended" = symmetric reconstruction
+    minOuter: 250,          // model B only
+    tolRatio: 0.14,         // model B only
+  };
+  let activeTab = "a";
+
+  const el = (id) => document.getElementById(id);
+  const round = (n) => Math.round(n * 10) / 10;
+  const fmt = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+  const pct = (v) => (v / FRAME_W * 100) + "%";
+  const relaxVal = () => (state.relaxOn ? state.relax : 0);
+
+  /* ---------- shared stage markup ---------- */
+  function stageHTML(p, opts) {
+    return `
+      <div class="frame" id="${p}Frame">
+        <div class="grid-lines"><span style="left:25%"></span><span style="left:75%"></span></div>
+        ${opts.dead ? `<div class="dead" id="${p}DeadL"></div><div class="dead" id="${p}DeadR"></div>` : ""}
+        ${opts.policyBand ? `<div class="band policy" id="${p}BandPolicy"></div>` : ""}
+        <div class="band" id="${p}Band"></div>
+        <div class="center-line" id="${p}CentreLine"></div>
+        ${opts.midpoint ? `<div class="bandlabel" id="${p}BandLabel"></div><div class="dxbar" id="${p}DxBar"></div><div class="dxlabel" id="${p}DxLabel"></div><div class="ctick" id="${p}Ctick"></div>` : ""}
+        <div class="erect" id="${p}Erect" tabindex="0" role="slider" aria-label="Eye rectangle horizontal position"
+             aria-valuemin="0" aria-valuemax="1080" aria-valuenow="340">
+          <span class="tag" id="${p}Tag"></span>
+          <span class="handle left" id="${p}HandleL"></span>
+          <span class="handle right" id="${p}HandleR"></span>
+        </div>
+        <div class="caliper eff" id="${p}CalMax"><span class="cap l"></span><span class="cap r"></span><span class="cl" id="${p}CalMaxLabel"></span></div>
+        ${opts.minCaliper ? `<div class="caliper min" id="${p}CalMin"><span class="cap l"></span><span class="cap r"></span><span class="cl" id="${p}CalMinLabel"></span></div>` : ""}
+      </div>
+      <div class="ruler" id="${p}Ruler"></div>
+      <div class="legend">${opts.legend}</div>`;
+  }
+
+  const SW = (border, bg) => `<i class="swatch" style="border-color:${border}; background:${bg}"></i>`;
+  el("aStage").innerHTML = stageHTML("a", {
+    dead: true, midpoint: false, minCaliper: false, policyBand: false,
+    legend: `<span>${SW("var(--accent)", "var(--accent-soft)")}eyeRect</span>
+             <span>${SW("var(--pass)", "var(--band)")}allowed x</span>
+             <span>${SW("var(--fail)", "var(--fail-soft)")}dead zone</span>
+             <span>${SW("var(--accent)", "transparent")}allowed width</span>`,
+  });
+  el("bStage").innerHTML = stageHTML("b", {
+    dead: false, midpoint: true, minCaliper: true, policyBand: true,
+    legend: `<span>${SW("var(--accent)", "var(--accent-soft)")}eyeRect + midpoint</span>
+             <span>${SW("var(--pass)", "var(--band)")}effective window · midpoint must land here</span>
+             <span>${SW("var(--muted)", "transparent")}policyTol unclipped</span>`,
+  });
+
+  /* ---------- shared control groups, cloned into both tabs ---------- */
+  function relaxGroupHTML(s, extraNote = "") {
+    return `
+      <h3>Relaxation</h3>
+      ${extraNote}
+      <div class="toggle-row">
+        <span class="meta"><span>Relaxation factor</span><small id="${s}RelaxState">On — applying 0.30</small></span>
+        <button class="toggle" id="${s}RelaxToggle" aria-pressed="true" aria-label="Enable relaxation factor"></button>
+      </div>
+      <label class="ctrl">
+        <span class="label">factor <i>0–1, when on</i></span>
+        <input type="number" id="${s}NumRelax" min="0" max="1" step="0.05" value="0.3">
+        <input type="range" id="${s}RngRelax" min="0" max="1" step="0.05" value="0.3" aria-label="relaxation factor">
+      </label>`;
+  }
+  function erectGroupHTML(s) {
+    return `
+      <h3>Eye rectangle</h3>
+      <label class="ctrl">
+        <span class="label">eRect_x <i>left edge, px</i></span>
+        <input type="number" id="${s}NumX" min="-200" max="1280" step="1" value="340">
+        <input type="range" id="${s}RngX" min="-200" max="1280" step="1" value="340" aria-label="eRect_x">
+      </label>
+      <label class="ctrl">
+        <span class="label">eRect_width <i>px</i></span>
+        <input type="number" id="${s}NumW" min="20" max="1080" step="1" value="400">
+        <input type="range" id="${s}RngW" min="20" max="1080" step="1" value="400" aria-label="eRect_width">
+      </label>
+      <div class="presets">
+        <button type="button" data-preset="centered">centred</button>
+        <button type="button" data-preset="too-close">too close</button>
+        <button type="button" data-preset="far-left">far left</button>
+        <button type="button" data-preset="far-right">far right</button>
+        <button type="button" data-preset="edge">at the edge</button>
+      </div>`;
+  }
+  el("aRelaxGroup").innerHTML = relaxGroupHTML("a");
+  el("bRelaxGroup").innerHTML = relaxGroupHTML("b",
+    `<p class="note">Never widens <b>frameLimit</b>.</p>`);
+  el("aErectGroup").innerHTML = erectGroupHTML("a");
+  el("bErectGroup").innerHTML = erectGroupHTML("b");
+
+  /* ---------- rulers ---------- */
+  ["aRuler", "bRuler"].forEach((id) => {
+    const r = el(id);
+    for (let v = 0; v <= FRAME_W; v += 270) {
+      const tick = document.createElement("i");
+      tick.style.left = pct(v);
+      const lab = document.createElement("b");
+      lab.style.left = pct(v);
+      lab.textContent = v;
+      r.append(tick, lab);
+    }
+  });
+
+  /* ---------- models ---------- */
+  function computeA(w = state.w, x = state.x, relax = relaxVal(), mode = state.aMode) {
+    const expected = (FRAME_W - w) / 2;
+    const effOuter = state.maxOuter * (1 + relax);
+    /* Shipped code scales the left bound by r; the symmetric reading — almost
+       certainly the intent — scales it by (1 − r), mirroring the right bound. */
+    const minX = expected * (mode === "intended" ? 1 - state.ratio : state.ratio);
+    const maxX = expected * (1 + state.ratio);
+    return {
+      expected, effOuter, minX, maxX, mode,
+      deadL: minX, deadR: 2 * expected - maxX,
+      /* as centre offsets, for the comparison chart */
+      offLeft: minX - expected, offRight: maxX - expected,
+      checks: [
+        { name: "outer distance", fail: w > effOuter, why: "Face too close — eye rectangle wider than the allowed outer distance.",
+          expr: `eRect_width ${fmt(round(w))} ${w > effOuter ? ">" : "≤"} ${fmt(round(effOuter))} max` },
+        { name: "left offset", fail: x < minX, why: "Face too far left — eRect_x below the allowed offset.",
+          expr: `eRect_x ${fmt(round(x))} ${x < minX ? "<" : "≥"} ${fmt(round(minX))} min` },
+        { name: "right offset", fail: x > maxX, why: "Face too far right — eRect_x above the allowed offset.",
+          expr: `eRect_x ${fmt(round(x))} ${x > maxX ? ">" : "≤"} ${fmt(round(maxX))} max` },
+      ],
+    };
+  }
+
+  function computeB(w = state.w, x = state.x, relax = relaxVal()) {
+    const c = x + w / 2;
+    const dx = c - CENTRE;                                       // target is always the frame centre
+    const effMax = state.maxOuter * (1 + relax);
+    const effMin = state.minOuter * (1 - relax);
+    const policyTol = state.tolRatio * FRAME_W * (1 + relax);   // policy — relaxes
+    const frameLimit = (FRAME_W - w) / 2;                        // geometry — never relaxes
+    const effTol = Math.min(policyTol, frameLimit);
+    return {
+      c, dx, effMax, effMin, policyTol, frameLimit, effTol,
+      winLo: CENTRE - effTol, winHi: CENTRE + effTol,
+      binding: policyTol <= frameLimit ? "policy" : "frame edge",
+      checks: [
+        { name: "too close", fail: w > effMax, why: "Face too close — eye rectangle wider than the allowed outer distance.",
+          expr: `eRect_width ${fmt(round(w))} ${w > effMax ? ">" : "≤"} ${fmt(round(effMax))} max` },
+        { name: "too far", fail: w < effMin, why: "Face too far away — eye rectangle narrower than the minimum.",
+          expr: `eRect_width ${fmt(round(w))} ${w < effMin ? "<" : "≥"} ${fmt(round(effMin))} min` },
+        { name: "off centre", fail: Math.abs(dx) > policyTol, why: `Face off centre — midpoint is ${dx > 0 ? "right" : "left"} of the tolerance; move ${dx > 0 ? "left" : "right"}.`,
+          expr: `|dx| ${fmt(round(Math.abs(dx)))} ${Math.abs(dx) > policyTol ? ">" : "≤"} ${fmt(round(policyTol))} policyTol` },
+        { name: "out of frame", fail: Math.abs(dx) > frameLimit, why: "Eye rectangle crosses the frame edge.",
+          expr: `|dx| ${fmt(round(Math.abs(dx)))} ${Math.abs(dx) > frameLimit ? ">" : "≤"} ${fmt(round(frameLimit))} frameLimit` },
+      ],
+    };
+  }
+
+  /* ---------- shared stage painting ---------- */
+  function paintErect(p, isFail, tagText) {
+    const e = el(p + "Erect");
+    e.style.left = pct(state.x);
+    e.style.width = pct(state.w);
+    e.style.top = "26%";
+    e.style.height = "6.5%";
+    e.classList.toggle("is-fail", isFail);
+    e.setAttribute("aria-valuenow", Math.round(state.x));
+    el(p + "Tag").textContent = tagText;
+    const f = el(p + "Frame");
+    f.classList.toggle("is-fail", isFail);
+    f.classList.toggle("is-pass", !isFail);
+  }
+  function placeCaliper(node, centre, width, top) {
+    node.style.left = pct(centre - width / 2);
+    node.style.width = pct(width);
+    node.style.top = top;
+  }
+  function placeBand(node, lo, hi) {
+    const a = Math.max(0, lo), b = Math.min(FRAME_W, hi);
+    node.style.left = pct(a);
+    node.style.width = pct(Math.max(0, b - a));
+  }
+
+  function renderA() {
+    const c = computeA();
+    const failed = c.checks.filter((k) => k.fail);
+    const isFail = failed.length > 0;
+    paintErect("a", isFail, `w ${Math.round(state.w)} · x ${Math.round(state.x)}`);
+
+    placeBand(el("aBand"), c.minX, c.maxX);
+    el("aDeadL").style.left = "0";
+    el("aDeadL").style.width = pct(Math.max(0, Math.min(FRAME_W, c.deadL)));
+    const dr = Math.max(0, Math.min(FRAME_W, c.deadR));
+    el("aDeadR").style.left = pct(FRAME_W - dr);
+    el("aDeadR").style.width = pct(dr);
+
+    placeCaliper(el("aCalMax"), state.x + state.w / 2, c.effOuter, "36%");
+    el("aCalMax").classList.toggle("is-fail", c.checks[0].fail);
+    el("aCalMaxLabel").textContent = `allowed ${fmt(round(c.effOuter))}` +
+      (relaxVal() > 0 ? ` = ${fmt(round(state.maxOuter))} × ${(1 + relaxVal()).toFixed(2)}` : "");
+
+    el("aExpected").textContent = fmt(round(c.expected));
+    el("aOuter").textContent = fmt(round(c.effOuter));
+    el("aRange").textContent = `${fmt(round(c.minX))} – ${fmt(round(c.maxX))}`;
+    el("aCentre").textContent = fmt(round(state.x + state.w / 2));
+    el("aDeadLVal").textContent = fmt(round(c.deadL));
+    el("aDeadRVal").textContent = fmt(round(c.deadR));
+
+    const intended = state.aMode === "intended";
+    el("aRulesTitle").textContent = intended ? "Rules as likely intended" : "Rules as implemented";
+    el("aRules").innerHTML = [
+      `<span>expectedXOffset = (1080 − eRect_width) / 2</span>`,
+      `<span>effectiveMaxOuter = maxOuterDistance × (1 + relaxation)</span>`,
+      `<span>FAIL if eRect_width &gt; effectiveMaxOuter</span>`,
+      `<span>FAIL if eRect_x &lt; expectedXOffset × ${intended ? "(1 − maxOffsetRatio)" : "maxOffsetRatio"}</span>`,
+      `<span>FAIL if eRect_x &gt; expectedXOffset × (1 + maxOffsetRatio)</span>`,
+      `<span class="dim">left dead zone  = ${intended ? "(1 − r)" : "r"} × expectedXOffset</span>`,
+      `<span class="dim">right dead zone = (1 − r) × expectedXOffset</span>`,
+    ].join("");
+    el("aRulesNote").innerHTML = intended
+      ? `Symmetric: allowed offset is <b>±r × expectedXOffset</b> and both dead zones are equal. Note this is <b>stricter than the shipped build</b>, not laxer — it removes left-side latitude. It still scales with expectedXOffset, so the window keeps collapsing as the face gets closer.`
+      : `One shared ratio makes the dead zones unequal — the left bound scales by r, the right by 1 + r, so they match only at r = 0.5. Relaxation applies to maxOuterDistance only.`;
+    el("aModeNote").innerHTML = intended
+      ? `Reconstruction of the intent: <b>× (1 − r)</b> mirrors the right bound.`
+      : `As shipped: <b>× r</b>. Larger r tightens the left bound but loosens the right — the contradiction that suggests a slip.`;
+    return { failed, isFail, ledger: c.checks };
+  }
+
+  function renderB() {
+    const c = computeB();
+    const failed = c.checks.filter((k) => k.fail);
+    const isFail = failed.length > 0;
+    const sign = c.dx > 0 ? "+" : "";
+    paintErect("b", isFail, `w ${Math.round(state.w)} · dx ${sign}${Math.round(c.dx)}`);
+
+    placeBand(el("bBandPolicy"), CENTRE - c.policyTol, CENTRE + c.policyTol);
+    placeBand(el("bBand"), c.winLo, c.winHi);
+
+    const bl = el("bBandLabel");
+    bl.style.left = pct(CENTRE);
+    bl.textContent = `effective window ${Math.round(c.winLo)} – ${Math.round(c.winHi)}`;
+
+    const outside = c.c < c.winLo || c.c > c.winHi;
+    const tick = el("bCtick");
+    tick.style.left = pct(c.c);
+    tick.classList.toggle("is-fail", outside);
+
+    const bar = el("bDxBar"), lab = el("bDxLabel");
+    const lo = Math.min(CENTRE, c.c), hi = Math.max(CENTRE, c.c);
+    bar.style.left = pct(lo);
+    bar.style.width = pct(hi - lo);
+    bar.style.top = "21%";
+    bar.classList.toggle("is-fail", outside);
+    lab.style.left = pct((lo + hi) / 2);
+    lab.style.top = "13%";
+    lab.textContent = `dx ${sign}${Math.round(c.dx)}`;
+
+    placeCaliper(el("bCalMax"), c.c, c.effMax, "36%");
+    el("bCalMax").classList.toggle("is-fail", c.checks[0].fail);
+    el("bCalMaxLabel").textContent = `max ${fmt(round(c.effMax))}`;
+    placeCaliper(el("bCalMin"), c.c, c.effMin, "45%");
+    el("bCalMinLabel").textContent = `min ${fmt(round(c.effMin))}`;
+
+    el("bCentre").textContent = fmt(round(c.c));
+    el("bDx").textContent = `${sign}${fmt(round(c.dx))}`;
+    el("bPolicy").textContent = `±${fmt(round(c.policyTol))}`;
+    el("bFrameLimit").textContent = `±${fmt(round(c.frameLimit))}`;
+    el("bWindow").textContent = `${fmt(round(c.winLo))} – ${fmt(round(c.winHi))}`;
+    el("bBind").textContent = c.binding;
+    el("bTolPx").textContent = `× 1080 = ±${fmt(round(state.tolRatio * FRAME_W))} px`;
+    return { failed, isFail, ledger: c.checks };
+  }
+
+  function paintLedger(id, checks) {
+    el(id).innerHTML = checks.map((k) => `
+      <div class="check">
+        <span class="name">${k.name}</span>
+        <span class="pill ${k.fail ? "fail" : "pass"}">${k.fail ? "FAIL" : "PASS"}</span>
+        <span class="expr">${k.expr}</span>
+      </div>`).join("");
+  }
+
+  function render() {
+    const a = renderA();
+    const b = renderB();
+    paintLedger("aLedger", a.ledger);
+    paintLedger("bLedger", b.ledger);
+
+    ["a", "b"].forEach((s) => {
+      el(s + "RelaxState").textContent = state.relaxOn
+        ? `On — applying ${state.relax.toFixed(2)}`
+        : "Off — treated as 0";
+      el(s + "RelaxToggle").setAttribute("aria-pressed", String(state.relaxOn));
+    });
+
+    const active = activeTab === "a" ? a : b;
+    const verdict = el("verdict");
+    verdict.classList.toggle("hidden", activeTab === "c");
+    if (activeTab !== "c") {
+      verdict.classList.toggle("fail", active.isFail);
+      verdict.classList.toggle("pass", !active.isFail);
+      el("verdictLabel").textContent = active.isFail ? "FAIL" : "PASS";
+      el("verdictDetail").textContent = active.isFail
+        ? active.failed.map((k) => k.why).join(" ")
+        : "All width-axis checks satisfied.";
+    }
+    if (activeTab === "c") { drawChart(); fillTable(); }
+  }
+
+  /* ---------- inputs: typing is never clamped mid-keystroke ---------- */
+  function bind(key, numId, rngId, mirror) {
+    const num = el(numId), rng = el(rngId);
+    const lo = parseFloat(num.min), hi = parseFloat(num.max);
+    const clamp = (v) => Math.min(hi, Math.max(lo, v));
+    const apply = (raw, echoNum = true) => {
+      const v = parseFloat(raw);
+      if (Number.isNaN(v)) return;
+      const c = clamp(v);
+      state[key] = c;
+      rng.value = c;
+      if (echoNum) num.value = c;
+      if (mirror) mirror.forEach((m) => { const n = el(m); if (n) n.value = c; });
+      render();
+    };
+    num.addEventListener("input", (e) => apply(e.target.value, false));
+    num.addEventListener("change", (e) => apply(e.target.value, true));
+    num.addEventListener("blur", () => { num.value = state[key]; });
+    rng.addEventListener("input", (e) => apply(e.target.value, true));
+    return apply;
+  }
+
+  /* maxOuter, relaxation and the eye rect appear on both tabs — keep them in sync */
+  const setOuterA = bind("maxOuter", "numOuter", "rngOuter", ["numOuter2", "rngOuter2"]);
+  const setOuterB = bind("maxOuter", "numOuter2", "rngOuter2", ["numOuter", "rngOuter"]);
+  bind("ratio", "numRatio", "rngRatio");
+  bind("minOuter", "numMinOuter", "rngMinOuter");
+  bind("tolRatio", "numTol", "rngTol");
+  const setRelax = [
+    bind("relax", "aNumRelax", "aRngRelax", ["bNumRelax", "bRngRelax"]),
+    bind("relax", "bNumRelax", "bRngRelax", ["aNumRelax", "aRngRelax"]),
+  ];
+  const setXs = [
+    bind("x", "aNumX", "aRngX", ["bNumX", "bRngX"]),
+    bind("x", "bNumX", "bRngX", ["aNumX", "aRngX"]),
+  ];
+  const setWs = [
+    bind("w", "aNumW", "aRngW", ["bNumW", "bRngW"]),
+    bind("w", "bNumW", "bRngW", ["aNumW", "aRngW"]),
+  ];
+  const setX = (v) => setXs[0](v);
+  const setW = (v) => setWs[0](v);
+
+  el("modeImpl").addEventListener("click", () => { state.aMode = "impl"; syncMode(); });
+  el("modeIntended").addEventListener("click", () => { state.aMode = "intended"; syncMode(); });
+  function syncMode() {
+    el("modeImpl").setAttribute("aria-pressed", String(state.aMode === "impl"));
+    el("modeIntended").setAttribute("aria-pressed", String(state.aMode === "intended"));
+    render();
+  }
+
+  ["aRelaxToggle", "bRelaxToggle"].forEach((id) => {
+    el(id).addEventListener("click", () => { state.relaxOn = !state.relaxOn; render(); });
+  });
+
+  /* ---------- drag / keyboard on both stages ---------- */
+  ["a", "b"].forEach((p) => {
+    const frame = el(p + "Frame"), erect = el(p + "Erect");
+    const unitsPerPx = () => FRAME_W / frame.getBoundingClientRect().width;
+
+    function startDrag(e, mode) {
+      e.preventDefault(); e.stopPropagation();
+      const startClient = e.clientX;
+      const start = { x: state.x, w: state.w };
+      const k = unitsPerPx();
+      erect.classList.add("dragging");
+      const move = (ev) => {
+        const d = (ev.clientX - startClient) * k;
+        if (mode === "move") setX(Math.round(start.x + d));
+        else if (mode === "right") setW(Math.round(start.w + d));
+        else {
+          const w = Math.max(20, Math.round(start.w - d));
+          setX(Math.round(start.x + (start.w - w)));
+          setW(w);
+        }
+      };
+      const up = () => {
+        erect.classList.remove("dragging");
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+    }
+    erect.addEventListener("pointerdown", (e) => startDrag(e, "move"));
+    el(p + "HandleL").addEventListener("pointerdown", (e) => startDrag(e, "left"));
+    el(p + "HandleR").addEventListener("pointerdown", (e) => startDrag(e, "right"));
+    erect.addEventListener("keydown", (e) => {
+      const step = e.shiftKey ? 20 : 4;
+      if (e.key === "ArrowLeft") { setX(state.x - step); e.preventDefault(); }
+      if (e.key === "ArrowRight") { setX(state.x + step); e.preventDefault(); }
+      if (e.key === "ArrowUp") { setW(state.w + step); e.preventDefault(); }
+      if (e.key === "ArrowDown") { setW(state.w - step); e.preventDefault(); }
+    });
+  });
+
+  const PRESETS = {
+    centered: { w: 400, x: 340 },
+    "too-close": { w: 1040, x: 20 },
+    "far-left": { w: 400, x: 40 },
+    "far-right": { w: 400, x: 470 },
+    edge: { w: 975, x: 52 },
+  };
+  document.querySelectorAll("[data-preset]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const p = PRESETS[btn.dataset.preset];
+      setW(p.w); setX(p.x);
+    });
+  });
+
+  /* ---------- tabs ---------- */
+  const TABS = { a: "panelA", b: "panelB", c: "panelC" };
+  Object.keys(TABS).forEach((k) => {
+    el("tab" + k.toUpperCase()).addEventListener("click", () => {
+      activeTab = k;
+      Object.keys(TABS).forEach((j) => {
+        el("tab" + j.toUpperCase()).setAttribute("aria-selected", String(j === k));
+        el(TABS[j]).classList.toggle("active", j === k);
+      });
+      sizeStages();
+      render();
+    });
+  });
+
+  /* ---------- sizing: frame height drives width via the 1080:1920 aspect ---------- */
+  function sizeStages() {
+    const narrow = window.innerWidth <= 900;
+    /* Measured on the panels container, which is laid out even while a panel is
+       hidden — an inactive panel reports clientHeight 0. */
+    const avail = el("panels").clientHeight;
+    ["a", "b"].forEach((p) => {
+      const f = el(p + "Frame");
+      if (narrow) { f.style.height = ""; f.style.width = ""; return; }
+      if (avail < 40) return;
+      const h = Math.max(220, Math.min(avail - 39, 780));
+      f.style.height = h + "px";
+      f.style.width = Math.round(h * ASPECT) + "px";
+    });
+    sizeChart();
+  }
+
+  /* ---------- comparison chart ---------- */
+  const canvas = el("chart"), tip = el("chartTip");
+  let chartBox = null;
+
+  function sizeChart() {
+    const wrap = el("chartWrap");
+    const r = wrap.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) return;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(r.width * dpr);
+    canvas.height = Math.round(r.height * dpr);
+    if (activeTab === "c") drawChart();
+  }
+
+  function cssVar(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  function drawChart() {
+    const r = el("chartWrap").getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) return;
+    const dpr = window.devicePixelRatio || 1;
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const W = r.width, H = r.height;
+    ctx.clearRect(0, 0, W, H);
+
+    const ink = cssVar("--ink"), muted = cssVar("--muted"), rule = cssVar("--rule");
+    const cur = cssVar("--ser-current"), pro = cssVar("--ser-proposed");
+    const surface = cssVar("--panel");
+    const M = { l: 46, r: 12, t: 10, b: 30 };
+    const pw = W - M.l - M.r, ph = H - M.t - M.b;
+    if (pw < 40 || ph < 40) return;
+
+    const YMAX = 560;
+    const X = (w) => M.l + (w / FRAME_W) * pw;
+    const Y = (off) => M.t + ph / 2 - (off / YMAX) * (ph / 2);
+
+    /* grid + axes */
+    ctx.font = '10px ui-monospace, Menlo, monospace';
+    ctx.strokeStyle = rule; ctx.fillStyle = muted; ctx.lineWidth = 1;
+    for (let off = -400; off <= 400; off += 200) {
+      const y = Y(off);
+      ctx.globalAlpha = off === 0 ? 0 : .55;
+      ctx.beginPath(); ctx.moveTo(M.l, y); ctx.lineTo(W - M.r, y); ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.textAlign = "right"; ctx.textBaseline = "middle";
+      ctx.fillText(String(off), M.l - 6, y);
+    }
+    for (let w = 0; w <= FRAME_W; w += 270) {
+      const x = X(w);
+      ctx.globalAlpha = .55;
+      ctx.beginPath(); ctx.moveTo(x, M.t); ctx.lineTo(x, M.t + ph); ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.textAlign = "center"; ctx.textBaseline = "top";
+      ctx.fillText(String(w), x, M.t + ph + 7);
+    }
+    ctx.save();
+    ctx.translate(11, M.t + ph / 2); ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("allowed offset from centre (px)", 0, 0);
+    ctx.restore();
+    ctx.textAlign = "right"; ctx.textBaseline = "bottom";
+    ctx.fillText("eRect_width (px) →  closer", W - M.r, H - 2);
+
+    /* zero line — perfect centring */
+    ctx.strokeStyle = muted; ctx.globalAlpha = .8; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(M.l, Y(0)); ctx.lineTo(W - M.r, Y(0)); ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    /* sample both models across the width axis */
+    const relax = relaxVal();
+    const pts = [];
+    for (let i = 0; i <= 240; i++) {
+      const w = (i / 240) * FRAME_W;
+      const a = computeA(w, 0, relax, "impl");
+      const a2 = computeA(w, 0, relax, "intended");
+      const b = computeB(w, 0, relax);
+      pts.push({ w, aL: a.offLeft, aR: a.offRight, a2: a2.offRight, bT: b.effTol });
+    }
+
+    const region = (upper, lower, colour, hatch) => {
+      ctx.beginPath();
+      pts.forEach((p, i) => { const x = X(p.w), y = Y(upper(p)); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+      for (let i = pts.length - 1; i >= 0; i--) { const p = pts[i]; ctx.lineTo(X(p.w), Y(lower(p))); }
+      ctx.closePath();
+      if (hatch) {
+        /* texture instead of a solid fill — secondary encoding beyond hue, and it
+           keeps the overlap with the other region legible rather than muddy */
+        ctx.save(); ctx.clip();
+        ctx.strokeStyle = colour; ctx.globalAlpha = .45; ctx.lineWidth = 1;
+        for (let d = -H; d < W + H; d += 9) {
+          ctx.beginPath(); ctx.moveTo(M.l + d, M.t + ph); ctx.lineTo(M.l + d + ph, M.t); ctx.stroke();
+        }
+        ctx.restore();
+      } else {
+        ctx.save();
+        ctx.globalAlpha = .2; ctx.fillStyle = colour; ctx.fill();
+        ctx.restore();
+      }
+      ctx.strokeStyle = colour; ctx.lineWidth = 2; ctx.globalAlpha = 1;
+      [upper, lower].forEach((f) => {
+        ctx.beginPath();
+        pts.forEach((p, i) => { const x = X(p.w), y = Y(f(p)); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+        ctx.stroke();
+      });
+    };
+    region((p) => p.aR, (p) => p.aL, cur, true);
+    region((p) => p.bT, (p) => -p.bT, pro, false);
+
+    /* the symmetric reconstruction — same rule family as "current", so same hue,
+       distinguished by line style rather than a third colour */
+    ctx.save();
+    ctx.strokeStyle = cur; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    [(p) => p.a2, (p) => -p.a2].forEach((f) => {
+      ctx.beginPath();
+      pts.forEach((p, i) => { const x = X(p.w), y = Y(f(p)); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+      ctx.stroke();
+    });
+    ctx.restore();
+
+    /* direct labels */
+    ctx.font = '10px ui-monospace, Menlo, monospace';
+    ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    const labelAt = (text, w, off, colour) => {
+      const x = X(w), y = Y(off);
+      const tw = ctx.measureText(text).width;
+      ctx.fillStyle = surface; ctx.globalAlpha = .85;
+      ctx.fillRect(x - 2, y - 7, tw + 6, 14);
+      ctx.globalAlpha = 1; ctx.fillStyle = colour;
+      ctx.fillText(text, x + 1, y);
+    };
+    labelAt("as shipped", 60, computeA(60, 0, relax, "impl").offLeft * 0.72, cur);
+    labelAt("as intended", 132, computeA(132, 0, relax, "intended").offRight + 26, cur);
+    labelAt("proposed", 300, computeB(300, 0, relax).effTol + 46, pro);
+
+    /* distance bounds from the proposed model */
+    const b0 = computeB(state.w, state.x, relax);
+    [[b0.effMin, "min"], [b0.effMax, "max"]].forEach(([wv, name]) => {
+      if (wv <= 0 || wv >= FRAME_W) return;
+      const x = X(wv);
+      ctx.save();
+      ctx.strokeStyle = muted; ctx.globalAlpha = .75; ctx.setLineDash([3, 3]); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x, M.t); ctx.lineTo(x, M.t + ph); ctx.stroke();
+      ctx.restore();
+      ctx.fillStyle = muted; ctx.textAlign = "center"; ctx.textBaseline = "top";
+      ctx.fillText(name, x, M.t + 1);
+    });
+
+    /* where the current geometry sits */
+    const cx = X(state.w), cy = Y(b0.dx);
+    ctx.save();
+    ctx.strokeStyle = ink; ctx.globalAlpha = .5; ctx.setLineDash([2, 3]);
+    ctx.beginPath(); ctx.moveTo(cx, M.t); ctx.lineTo(cx, M.t + ph); ctx.stroke();
+    ctx.restore();
+    ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+    ctx.fillStyle = ink; ctx.fill();
+    ctx.strokeStyle = surface; ctx.lineWidth = 2; ctx.stroke();
+    chartBox = { M, pw, ph, W, H, X, Y, YMAX };
+  }
+
+  /* hover crosshair + tooltip */
+  el("chartWrap").addEventListener("pointermove", (ev) => {
+    if (!chartBox) return;
+    const r = el("chartWrap").getBoundingClientRect();
+    const px = ev.clientX - r.left;
+    const { M, pw } = chartBox;
+    if (px < M.l || px > M.l + pw) { tip.classList.remove("on"); return; }
+    const w = ((px - M.l) / pw) * FRAME_W;
+    const relax = relaxVal();
+    const a = computeA(w, 0, relax), b = computeB(w, 0, relax);
+    const a2 = computeA(w, 0, relax, "intended");
+    tip.innerHTML = `
+      <div><span class="k">eRect_width</span> ${Math.round(w)}</div>
+      <div class="row"><span class="dot" style="background:${cssVar("--ser-current")}"></span>
+        shipped ${Math.round(a.offLeft)} … +${Math.round(a.offRight)}</div>
+      <div class="row"><span class="dot" style="background:${cssVar("--ser-current")}; opacity:.45"></span>
+        intended ±${Math.round(a2.offRight)}</div>
+      <div class="row"><span class="dot" style="background:${cssVar("--ser-proposed")}"></span>
+        proposed ±${Math.round(b.effTol)}</div>`;
+    tip.classList.add("on");
+    const tw = tip.offsetWidth, th = tip.offsetHeight;
+    tip.style.left = Math.min(Math.max(px - tw / 2, 2), r.width - tw - 2) + "px";
+    tip.style.top = Math.max(2, ev.clientY - r.top - th - 10) + "px";
+  });
+  el("chartWrap").addEventListener("pointerleave", () => tip.classList.remove("on"));
+
+  function fillTable() {
+    const relax = relaxVal();
+    const rows = [200, 400, 600, 750, 975];
+    el("cmpBody").innerHTML = rows.map((w) => {
+      const a = computeA(w, 0, relax, "impl");
+      const a2 = computeA(w, 0, relax, "intended");
+      const b = computeB(w, 0, relax);
+      return `<tr><td>${w}</td><td>${Math.round(a.offLeft)}</td><td>+${Math.round(a.offRight)}</td>` +
+             `<td>±${Math.round(a2.offRight)}</td><td>±${Math.round(b.effTol)}</td></tr>`;
+    }).join("");
+  }
+
+  /* theme changes repaint the canvas — CSS vars alone can't reach it */
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (activeTab === "c") drawChart(); });
+  new MutationObserver(() => { if (activeTab === "c") drawChart(); })
+    .observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+  window.addEventListener("resize", () => { sizeStages(); render(); });
+  sizeStages();
+  render();
+  requestAnimationFrame(() => { sizeStages(); render(); });
+</script>
