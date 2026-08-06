@@ -69,10 +69,12 @@ expectedX = 1080 / 2.0 = 540        expectedY = 1920 / 2.5 = 768
 xError = (expectedX − eRect_x − eRect_width  / 2) / expectedX
 yError = (expectedY − eRect_y − eRect_height / 2) / expectedY
 
-buffer = shouldBeRelaxed ? relaxationRatio : 0
+buffer       = shouldBeRelaxed ? relaxationRatio       : 0
+centreBuffer = shouldBeRelaxed ? centreRelaxationRatio : 0
+
 minOuter = minOuterDistance × (1 − buffer)
 maxOuter = maxOuterDistance × (1 + buffer)
-rLR, rTop, rBottom = ratio × (1 − buffer)
+rLR, rTop, rBottom = ratio × (1 − centreBuffer)
 
 ERROR if noFacePercent >= faceErrorThresholdRatio × 100
 ERROR if avgOuterDistance <= minOuter   (too far)
@@ -91,6 +93,12 @@ Two observations the simulator makes visible:
    needs `(1 + b)` to widen, but gets `(1 − b)`. At `b = 0.30` the horizontal tolerance
    goes from ±108 px to ±75.6 px — relaxing the gate makes centring 30% stricter. The
    **relax bug** preset sits at `cx = 630`: it passes unrelaxed and warns when relaxed.
+
+   Centring has its own `centreRelaxationRatio`, separate from the distance
+   `relaxationRatio` but gated by the same `shouldBeRelaxed` flag. Setting it to **0**
+   removes the tightening while distances keep relaxing — the smallest available fix.
+   Changing the sign to `(1 + centreBuffer)` would instead make relaxation loosen
+   centring, if that was the original intent.
 2. **The Y labels invert X's convention.** A larger `cy` is *lower* in frame yet is
    flagged `TOP`, while a larger `cx` is flagged `RIGHT`. Exactly one of the two is
    mislabelled, whichever way `WarningLocation` is meant to be read.

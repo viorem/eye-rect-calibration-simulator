@@ -474,12 +474,13 @@
               <span>xError = (expectedX − eRect_x − eRect_width / 2) / expectedX</span>
               <span>yError = (expectedY − eRect_y − eRect_height / 2) / expectedY</span>
               <span class="dim">buffer = shouldBeRelaxed ? relaxationRatio : 0</span>
-              <span class="key">rLR, rTop, rBottom = ratio × (1 − buffer)</span>
-              <span>ERROR if avgOuter &lt;= min×(1−b) or &gt;= max×(1+b)</span>
+              <span class="dim">centreBuffer = shouldBeRelaxed ? centreRelaxationRatio : 0</span>
+              <span class="key">rLR, rTop, rBottom = ratio × (1 − centreBuffer)</span>
+              <span>ERROR if avgOuter &lt;= min×(1−buffer) or &gt;= max×(1+buffer)</span>
               <span>xError &lt; −rLR → RIGHT · &gt; rLR → LEFT</span>
               <span>yError &lt; −rTop → TOP · &gt; rBottom → BOTTOM</span>
             </div>
-            <p class="note"><b>Two things look wrong.</b> Relaxation multiplies the offset ratios by (1−b), which <i>narrows</i> them — ±108 px becomes ±75.6 px at b = 0.30 — while the distance band correctly widens. And larger cy, meaning lower in frame, is flagged TOP whereas larger cx is flagged RIGHT, so one of the two label sets is inverted.</p>
+            <p class="note"><b>Two things look wrong.</b> The offset ratios are multiplied by (1 − centreBuffer), which <i>narrows</i> them, while the distance band correctly widens — setting centreRelaxationRatio to 0 neutralises that, and (1 + b) would actually loosen. And larger cy, meaning lower in frame, is flagged TOP whereas larger cx is flagged RIGHT, so one of the two label sets is inverted.</p>
           </div>
         </div>
       </div>
@@ -609,6 +610,9 @@
     dBottom: 0.2,           // maxOffsetBottomRatio
     faceErrRatio: 0.2,      // faceErrorThresholdRatio
     noFacePct: 5,           // simulated getPercentOfIndex(NO_FACE_FOUND)
+    /* Centring gets its own magnitude, gated by the same shouldBeRelaxed flag.
+       Defaults to relaxationRatio so tab C still mirrors the shipped behaviour. */
+    relaxCentre: 0.3,
   };
   let activeTab = "a";
 
@@ -617,6 +621,7 @@
   const fmt = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
   const pct = (v) => (v / FRAME_W * 100) + "%";
   const relaxVal = () => (state.relaxOn ? state.relax : 0);
+  const relaxCentreVal = () => (state.relaxOn ? state.relaxCentre : 0);
 
   /* ---------- shared stage markup ---------- */
   function stageHTML(p, opts) {
@@ -720,7 +725,24 @@
       </div>`;
   }
   el("pStage").innerHTML = stage2dHTML("p");
-  el("pRelaxGroup").innerHTML = relaxGroupHTML("p");
+  /* One shouldBeRelaxed flag, two magnitudes: distances and centring are tuned apart. */
+  el("pRelaxGroup").innerHTML = `
+    <h3>Relaxation</h3>
+    <div class="toggle-row">
+      <span class="meta"><span>shouldBeRelaxed</span><small id="pRelaxState">On — applying 0.30</small></span>
+      <button class="toggle" id="pRelaxToggle" aria-pressed="true" aria-label="Enable relaxation"></button>
+    </div>
+    <label class="ctrl">
+      <span class="label">relaxationRatio <i>distances</i></span>
+      <input type="number" id="pNumRelax" min="0" max="1" step="0.05" value="0.3">
+      <input type="range" id="pRngRelax" min="0" max="1" step="0.05" value="0.3" aria-label="relaxationRatio for distances">
+    </label>
+    <label class="ctrl">
+      <span class="label">centreRelaxationRatio <i>offsets</i></span>
+      <input type="number" id="pNumRelaxC" min="0" max="1" step="0.05" value="0.3">
+      <input type="range" id="pRngRelaxC" min="0" max="1" step="0.05" value="0.3" aria-label="centreRelaxationRatio for offsets">
+    </label>
+    <p class="note" id="pRelaxNote"></p>`;
 
   el("aRelaxGroup").innerHTML = relaxGroupHTML("a");
   el("bRelaxGroup").innerHTML = relaxGroupHTML("b",
@@ -792,15 +814,17 @@
 
   /* Faithful port of the Kotlin. Note buffer multiplies the offset ratios by
      (1 − buffer), which narrows them — relaxing the gate tightens centring. */
-  function computeP(w = state.w, x = state.x, y = state.y, h = state.h, relax = relaxVal()) {
-    const buffer = relax;
+  function computeP(w = state.w, x = state.x, y = state.y, h = state.h,
+                    relax = relaxVal(), relaxC = relaxCentreVal()) {
+    const buffer = relax;          // distance thresholds
+    const centreBuffer = relaxC;   // offset ratios — independent magnitude
     const cx = x + w / 2, cy = y + h / 2;
     const xError = (EXP_X - cx) / EXP_X;
     const yError = (EXP_Y - cy) / EXP_Y;
 
-    const rLR = state.dLR * (1 - buffer);
-    const rTop = state.dTop * (1 - buffer);
-    const rBottom = state.dBottom * (1 - buffer);
+    const rLR = state.dLR * (1 - centreBuffer);
+    const rTop = state.dTop * (1 - centreBuffer);
+    const rBottom = state.dBottom * (1 - centreBuffer);
     const minOuter = state.minOuter * (1 - buffer);
     const maxOuter = state.maxOuter * (1 + buffer);
     const avgOuter = w;                       // outer distance ≈ eye-rect width
@@ -1006,6 +1030,16 @@
     el("pCxRange").textContent = `${Math.round(c.cxLo)} – ${Math.round(c.cxHi)}`;
     el("pCyRange").textContent = `${Math.round(c.cyLo)} – ${Math.round(c.cyHi)}`;
 
+    el("pRelaxState").textContent = state.relaxOn
+      ? `On — distances ${state.relax.toFixed(2)}, centring ${state.relaxCentre.toFixed(2)}`
+      : "Off — both treated as 0";
+    el("pRelaxToggle").setAttribute("aria-pressed", String(state.relaxOn));
+    /* centring tolerance in px, so the direction of the effect is unmissable */
+    const tolPx = c.rLR * EXP_X, basePx = state.dLR * EXP_X;
+    el("pRelaxNote").innerHTML = !state.relaxOn || state.relaxCentre === 0
+      ? `Centring unaffected: tolerance stays ±${fmt(round(basePx))} px.`
+      : `Centring tolerance ±${fmt(round(basePx))} → <b>±${fmt(round(tolPx))} px</b> — still (1 − ratio), so it <b>tightens</b>. Set 0 to neutralise.`;
+
     return { failed: [...errors, ...warns], isFail, isWarn, ledger: c.checks };
   }
 
@@ -1031,7 +1065,8 @@
     paintLedger("bLedger", b.ledger);
     paintLedger("pLedger", p.ledger);
 
-    ["a", "b", "p"].forEach((s) => {
+    /* 'p' has two magnitudes, so renderP writes its own label */
+    ["a", "b"].forEach((s) => {
       el(s + "RelaxState").textContent = state.relaxOn
         ? `On — applying ${state.relax.toFixed(2)}`
         : "Off — treated as 0";
@@ -1099,6 +1134,7 @@
   bind("faceErrRatio", [["numFaceErr", null]]);
   bind("noFacePct", [["numNoFace", null]]);
   bind("relax", [["aNumRelax", "aRngRelax"], ["bNumRelax", "bRngRelax"], ["pNumRelax", "pRngRelax"]]);
+  bind("relaxCentre", [["pNumRelaxC", "pRngRelaxC"]]);
   const setX = bind("x", [["aNumX", "aRngX"], ["bNumX", "bRngX"], ["pNumX", null]]);
   const setW = bind("w", [["aNumW", "aRngW"], ["bNumW", "bRngW"], ["pNumW", null]]);
   const setY = bind("y", [["pNumY", null]]);
@@ -1388,7 +1424,7 @@
 
     /* production X tolerance: ratio × 540, independent of width — a flat pair.
        Same hue as "proposed" because it is the same constant-tolerance family. */
-    const prodTol = state.dLR * (1 - relax) * EXP_X;
+    const prodTol = state.dLR * (1 - relaxCentreVal()) * EXP_X;
     ctx.save();
     ctx.strokeStyle = pro; ctx.lineWidth = 1.5; ctx.setLineDash([2, 3]);
     [prodTol, -prodTol].forEach((off) => {
@@ -1457,7 +1493,7 @@
       <div class="row"><span class="dot" style="background:${cssVar("--ser-proposed")}"></span>
         proposed ±${Math.round(b.effTol)}</div>
       <div class="row"><span class="dot" style="background:${cssVar("--ser-proposed")}; opacity:.45"></span>
-        production ±${Math.round(state.dLR * (1 - relax) * EXP_X)}</div>`;
+        production ±${Math.round(state.dLR * (1 - relaxCentreVal()) * EXP_X)}</div>`;
     tip.classList.add("on");
     const tw = tip.offsetWidth, th = tip.offsetHeight;
     tip.style.left = Math.min(Math.max(px - tw / 2, 2), r.width - tw - 2) + "px";
