@@ -120,21 +120,16 @@
   .band.policy { background: none; border-left: 1px dotted var(--muted); border-right: 1px dotted var(--muted); }
   .center-line { position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: var(--muted); opacity: .5; }
 
-  /* Indicative head outline, scaled off the eye rect with rough adult proportions:
-     head ≈ 1.6× outer-eye width, ≈ 2.5× tall, eye line ≈ 46% down from the crown.
-     Clipped by the frame, so "too close" reads as a head overflowing the view. */
+  /* Indicative head outline, scaled off the eye rect. Ratios are the perspective-
+     corrected ones for selfie range, not the flat anatomical ones — see paintFace.
+     No ears: at this distance they sit at or behind the silhouette tangent and are
+     largely self-occluded, so drawing them overstates the head width. */
   .face {
     position: absolute; color: var(--muted);
     border: 1px solid currentColor; border-radius: 50% / 46%;
     opacity: .55; pointer-events: none;
   }
   .face.is-fail { color: var(--fail); opacity: .7; }
-  .face::before, .face::after {
-    content: ""; position: absolute; top: 38%; width: 8%; height: 15%;
-    border: 1px solid currentColor; opacity: .9;
-  }
-  .face::before { left: -5%; border-right: none; border-radius: 70% 0 0 70%; }
-  .face::after { right: -5%; border-left: none; border-radius: 0 70% 70% 0; }
 
   .erect { position: absolute; border: 2px solid var(--accent); background: var(--accent-soft); color: var(--accent); cursor: grab; display: flex; align-items: center; justify-content: center; }
   .erect.is-fail { border-color: var(--fail); background: var(--fail-soft); color: var(--fail); }
@@ -923,9 +918,16 @@
     f.classList.toggle("is-fail", isFail);
     f.classList.toggle("is-pass", !isFail);
   }
-  /* cx, cy and the eye-rect width are enough to place an indicative head */
+  /* Indicative head, sized from the eye rect.
+     Flat anatomy would give width 150/90 = 1.67× and height 230/90 = 2.56× the
+     outer-eye distance. But a selfie camera sits ~300–450 mm away and the widest part
+     of the skull is ~95 mm further from the lens than the eye corners, so the head is
+     projected from greater depth and compressed: ×D/(D+95) ≈ 0.81 at 400 mm, giving
+     ~1.35. Crown and chin are only ~70 and ~30 mm back, so height loses less: ~2.3.
+     The eye line stays at ~46% — the compression is near-symmetric about it. */
+  const HEAD_W_RATIO = 1.35, HEAD_H_RATIO = 2.3;
   function paintFace(id, cx, cy, w, fail) {
-    const headW = w * 1.6, headH = w * 2.5;
+    const headW = w * HEAD_W_RATIO, headH = w * HEAD_H_RATIO;
     const node = el(id);
     if (!node) return;
     node.style.left = pct(cx - headW / 2);

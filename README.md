@@ -106,11 +106,29 @@ allowed `cx` on the strip **below** the frame, allowed `cy` on the strip to its
 **left**, and `minOuterDistance` / `maxOuterDistance` as caliper lines under the eye
 rect, which track it as it moves.
 
-An indicative head outline is drawn around the eye rect on every rule tab — 1.6×
-the eye-rect width, 2.5× tall, eye line 46% down from the crown. It is decoration
+An indicative head outline is drawn around the eye rect on every rule tab — **1.35×
+the eye-rect width, 2.3× tall**, eye line 46% down from the crown. It is decoration
 for reading the geometry, not part of any check; the frame clips it, so "too close"
-shows as a head overflowing the view. Note the check is a frame-by-frame one, so the
-aggregate `faceErrorThresholdRatio` / no-face-percentage gate is not modelled here.
+shows as a head overflowing the view.
+
+Those ratios are **perspective-corrected, not flat anatomical**. Flat anatomy gives
+width `150/90 = 1.67×` and height `230/90 = 2.56×` the outer-eye distance. But a
+selfie camera is only ~300–450 mm away and the widest part of the skull sits ~95 mm
+further from the lens than the eye corners, so head width is projected from greater
+depth and compressed by `D/(D + 95)` — about 0.81 at 400 mm, giving ≈1.35. Crown and
+chin are only ~70 mm and ~30 mm back, so height loses less: ≈2.3. The eye line barely
+moves (45.6% vs 46%) because the compression is near-symmetric about it. Ears are not
+drawn: at this range they sit at or behind the silhouette tangent and are largely
+self-occluded, so including them overstates the width.
+
+Deriving the distance live from `eRect_width` was tried and rejected. At a 60°
+horizontal FOV, `eRect_width = 750 px` (`maxOuterDistance`) implies `D ≈ 112 mm` and a
+head *narrower* than the eye corners, which is impossible — so the eye rect cannot be
+90 mm of real outer-canthal distance in this coordinate space. Fixed ratios stay sane
+across the whole range instead.
+
+Note the checks here are per-frame, so the aggregate `faceErrorThresholdRatio` /
+no-face-percentage gate is deliberately not modelled.
 
 ## Deploying
 
