@@ -12,9 +12,14 @@ network calls. Open it directly in a browser, or deploy it as a static site.
 
 | Tab | What it shows |
 |---|---|
-| **A — Current rule** | The shipped algorithm. Includes a **Left bound** switch: `× r` as shipped vs `× (1 − r)`, the likely intended symmetric form. |
+| **A — Current rule** | The width-axis rule as first described. Includes a **Left bound** switch: `× r` as described vs `× (1 − r)`, the likely intended symmetric form. |
 | **B — Proposed** | Centring separated from closeness: independent `too close` / `too far` / `off centre` / `out of frame` checks. |
-| **C — Compare** | Allowed centring window vs `eRect_width` for all three variants, with a value table. |
+| **C — Production code** | Faithful port of the shipped Kotlin. Gates **both axes** and reports directional `WarningLocation` values. |
+| **D — Compare** | Allowed centring window vs `eRect_width` for every variant, with a value table. |
+
+Tab C is the authoritative one — it is verified against a direct transcription of the
+Kotlin. Note its X rule differs from tab A: it is symmetric about 540 with a tolerance
+of `ratio × 540` that does **not** vary with `eRect_width`.
 
 Geometry (`eRect_x`, `eRect_width`), `maxOuterDistance` and the relaxation factor are
 shared across tabs A and B, so the same face position can be judged by both models.
@@ -56,6 +61,39 @@ FAIL if |dx| > frameLimit
 Relaxation widens `policyTol` but never `frameLimit` — the former is policy, the
 latter is geometry — so loosening the tolerance can never permit an out-of-frame
 eye rect. Whichever is smaller binds, and the UI names which one.
+
+**C — production (the shipped Kotlin)**
+
+```
+expectedX = 1080 / 2.0 = 540        expectedY = 1920 / 2.5 = 768
+xError = (expectedX − eRect_x − eRect_width  / 2) / expectedX
+yError = (expectedY − eRect_y − eRect_height / 2) / expectedY
+
+buffer = shouldBeRelaxed ? relaxationRatio : 0
+minOuter = minOuterDistance × (1 − buffer)
+maxOuter = maxOuterDistance × (1 + buffer)
+rLR, rTop, rBottom = ratio × (1 − buffer)
+
+ERROR if noFacePercent >= faceErrorThresholdRatio × 100
+ERROR if avgOuterDistance <= minOuter   (too far)
+ERROR if avgOuterDistance >= maxOuter   (too close)
+xError < −rLR   → RIGHT      xError > rLR      → LEFT
+yError < −rTop  → TOP        yError > rBottom  → BOTTOM
+```
+
+Tolerance is `ratio × 540` horizontally and `ratio × 768` vertically. `expectedY` is
+`1920/2.5`, not the vertical centre, because eyes belong above the midline.
+
+Two observations the simulator makes visible:
+
+1. **Relaxation tightens the position checks.** The distance bounds use `(1 − b)` and
+   `(1 + b)` at opposite ends, so that band widens correctly. A symmetric ± tolerance
+   needs `(1 + b)` to widen, but gets `(1 − b)`. At `b = 0.30` the horizontal tolerance
+   goes from ±108 px to ±75.6 px — relaxing the gate makes centring 30% stricter. The
+   **relax bug** preset sits at `cx = 630`: it passes unrelaxed and warns when relaxed.
+2. **The Y labels invert X's convention.** A larger `cy` is *lower* in frame yet is
+   flagged `TOP`, while a larger `cx` is flagged `RIGHT`. Exactly one of the two is
+   mislabelled, whichever way `WarningLocation` is meant to be read.
 
 ## Deploying
 
