@@ -74,34 +74,38 @@ centreBuffer = shouldBeRelaxed ? centreRelaxationRatio : 0
 
 minOuter = minOuterDistance × (1 − buffer)
 maxOuter = maxOuterDistance × (1 + buffer)
-rLR, rTop, rBottom = ratio × (1 − centreBuffer)
+rLR, rTop, rBottom = ratio × (1 + centreBuffer)      // corrected, see below
 
 ERROR if noFacePercent >= faceErrorThresholdRatio × 100
 ERROR if avgOuterDistance <= minOuter   (too far)
 ERROR if avgOuterDistance >= maxOuter   (too close)
-xError < −rLR   → RIGHT      xError > rLR      → LEFT
-yError < −rTop  → TOP        yError > rBottom  → BOTTOM
+xError < −rLR      → RIGHT     xError > rLR     → LEFT
+yError < −rBottom  → BOTTOM    yError > rTop    → TOP     // corrected, see below
 ```
+
+**The tab differs from the shipped Kotlin in exactly two places**, both deliberate
+corrections rather than porting errors:
+
+1. Offsets scale by `(1 + centreBuffer)`; the shipped code has `(1 − buffer)`. A
+   symmetric ± tolerance must scale *up* to widen. The distance band was already
+   correct because its two ends move in opposite directions. Before the fix,
+   `shouldBeRelaxed = true` loosened distance while tightening centring by 30%.
+2. The Y branches are swapped. `yError` is positive when `cy` is small — the face is
+   *high* — so that case is `TOP` and takes `rTop`. The shipped code fires `TOP` on a
+   *low* face, contradicting X, where a large `cx` correctly gives `RIGHT`.
 
 Tolerance is `ratio × 540` horizontally and `ratio × 768` vertically. `expectedY` is
 `1920/2.5`, not the vertical centre, because eyes belong above the midline.
 
-Two observations the simulator makes visible:
+Centring has its own `centreRelaxationRatio`, separate from the distance
+`relaxationRatio` but gated by the same `shouldBeRelaxed` flag, so the two axes can be
+tuned independently. The **relax edge** preset sits at `cx = 665`: it warns unrelaxed
+and passes once relaxed, which is relaxation behaving the way it should.
 
-1. **Relaxation tightens the position checks.** The distance bounds use `(1 − b)` and
-   `(1 + b)` at opposite ends, so that band widens correctly. A symmetric ± tolerance
-   needs `(1 + b)` to widen, but gets `(1 − b)`. At `b = 0.30` the horizontal tolerance
-   goes from ±108 px to ±75.6 px — relaxing the gate makes centring 30% stricter. The
-   **relax bug** preset sits at `cx = 630`: it passes unrelaxed and warns when relaxed.
-
-   Centring has its own `centreRelaxationRatio`, separate from the distance
-   `relaxationRatio` but gated by the same `shouldBeRelaxed` flag. Setting it to **0**
-   removes the tightening while distances keep relaxing — the smallest available fix.
-   Changing the sign to `(1 + centreBuffer)` would instead make relaxation loosen
-   centring, if that was the original intent.
-2. **The Y labels invert X's convention.** A larger `cy` is *lower* in frame yet is
-   flagged `TOP`, while a larger `cx` is flagged `RIGHT`. Exactly one of the two is
-   mislabelled, whichever way `WarningLocation` is meant to be read.
+The stage reads both axes off the edges rather than labelling them inside the frame:
+allowed `cx` on the strip **below** the frame, allowed `cy` on the strip to its
+**left**, and `minOuterDistance` / `maxOuterDistance` as caliper lines under the eye
+rect, which track it as it moves.
 
 ## Deploying
 

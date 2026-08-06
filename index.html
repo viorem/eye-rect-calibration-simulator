@@ -151,7 +151,7 @@
   .caliper .cap.l { left: 0; }
   .caliper .cap.r { right: 0; }
   .caliper .cl { position: absolute; top: 5px; left: 50%; transform: translateX(-50%); font-family: var(--mono); font-size: 9px; letter-spacing: .02em; white-space: nowrap; color: var(--ink); background: var(--panel); border: 1px solid currentColor; border-radius: 2px; padding: 0 4px; }
-  .caliper.eff.is-fail { color: var(--fail); }
+  .caliper.eff.is-fail, .caliper.min.is-fail { color: var(--fail); }
 
   /* ---------- 2D production stage ---------- */
   .tolbox { position: absolute; background: var(--band); border: 1px dashed var(--pass); }
@@ -180,11 +180,23 @@
   }
   .xbar-mark.is-fail { background: var(--fail); }
 
-  .edgetag {
-    position: absolute; font-family: var(--mono); font-size: 8px; letter-spacing: .02em;
-    color: var(--pass); background: var(--panel); border: 1px solid var(--pass);
-    border-radius: 2px; padding: 0 3px; white-space: nowrap; pointer-events: none;
+  /* Y strip mirrors the X strip, on the left edge, so neither axis needs labels
+     inside the frame */
+  .row2d { display: flex; gap: 4px; align-items: stretch; min-height: 0; }
+  .below2d { margin-left: 15px; display: flex; flex-direction: column; gap: 6px; }
+  .ybar {
+    position: relative; width: 11px; flex: none; border-radius: 2px;
+    background: var(--sunken); border: 1px solid var(--rule);
   }
+  .ybar-allow {
+    position: absolute; left: 0; right: 0; background: var(--band);
+    border-top: 1px dashed var(--pass); border-bottom: 1px dashed var(--pass);
+  }
+  .ybar-mark {
+    position: absolute; left: -3px; right: -3px; height: 2px;
+    background: var(--accent); transform: translateY(-1px);
+  }
+  .ybar-mark.is-fail { background: var(--fail); }
   .verdict.warn { border-color: var(--accent); background: var(--accent-soft); }
   .verdict.warn .light { background: var(--accent); }
   .verdict.warn strong { color: var(--accent); }
@@ -211,7 +223,7 @@
   /* ---------- cards ---------- */
   .card { background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; box-shadow: var(--shadow); display: flex; flex-direction: column; min-height: 0; flex: 0 0 auto; }
   .card.grow { flex: 1 1 auto; }
-  .card > h2 { font-family: var(--mono); font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-weight: 500; padding: 6px 11px; border-bottom: 1px solid var(--rule); flex: none; }
+  .card > h2 { font-family: var(--mono); font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-weight: 500; padding: 5px 11px; border-bottom: 1px solid var(--rule); flex: none; }
   .card-body { padding: 9px 11px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; min-height: 0; }
 
   .check { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 5px 0; border-top: 1px solid var(--rule); align-items: baseline; }
@@ -490,12 +502,11 @@
               <span>xError = (expectedX − eRect_x − eRect_width / 2) / expectedX</span>
               <span>yError = (expectedY − eRect_y − eRect_height / 2) / expectedY</span>
               <span class="dim">when relaxed: buffer = relaxationRatio, centreBuffer = centreRelaxRatio</span>
-              <span class="key">rLR, rTop, rBottom = ratio × (1 − centreBuffer)</span>
+              <span class="key">rLR, rTop, rBottom = ratio × (1 + centreBuffer)</span>
               <span>ERROR if avgOuter &lt;= min×(1−buffer) or &gt;= max×(1+buffer)</span>
-              <span>xError &lt; −rLR → RIGHT · &gt; rLR → LEFT</span>
-              <span>yError &lt; −rTop → TOP · &gt; rBottom → BOTTOM</span>
+              <span class="key">xError &lt; −rLR → RIGHT · &gt; rLR → LEFT · yError &gt; rTop → TOP · &lt; −rBottom → BOTTOM</span>
             </div>
-            <p class="note"><b>Two things look wrong.</b> (1 − centreBuffer) <i>narrows</i> the offset ratios while the distance band correctly widens; set centreRelaxRatio to 0 to neutralise, or (1 + b) to loosen. And larger cy — lower in frame — is flagged TOP while larger cx is flagged RIGHT, so one label set is inverted.</p>
+            <p class="note"><b>Two corrections vs the shipped Kotlin</b>, both highlighted. Offsets scale by <b>(1 + centreBuffer)</b>, not (1 − buffer): a symmetric ± tolerance must scale up to widen, while the distance band was already right because its ends move in opposite directions. And the <b>Y branches are swapped</b> — yError is positive when cy is small, i.e. the face is high, so that case is TOP and takes rTop; the shipped code fires TOP on a <i>low</i> face. X was already consistent.</p>
           </div>
         </div>
       </div>
@@ -543,7 +554,7 @@
                 <button type="button" data-preset2="high">high</button>
                 <button type="button" data-preset2="right">right</button>
                 <button type="button" data-preset2="close">close</button>
-                <button type="button" data-preset2="paradox" title="Passes unrelaxed, warns when relaxed">relax bug</button>
+                <button type="button" data-preset2="edge" title="Warns unrelaxed, passes once relaxed">relax edge</button>
               </div>
               <div class="grid2">
                 <label><span>eRect_x</span><input type="number" id="pNumX" min="-200" max="1280" step="1" value="340"></label>
@@ -583,7 +594,7 @@
             <p class="note">Vertical axis is how far the eye-rect midpoint may sit from frame centre (540) before the gate fails. Horizontal axis is <code>eRect_width</code> — further right means the face is closer to the camera.</p>
             <p class="note"><b>As shipped</b> sits asymmetrically around zero — more room to drift left than right at every distance — and narrows to a point as the face approaches the frame width.</p>
             <p class="note"><b>As likely intended</b> (dashed) is the same formula with the left bound mirrored, <code>× (1 − r)</code>. It is symmetric, but <b>stricter</b> than the shipped build, and it still collapses with closeness.</p>
-            <p class="note"><b>Proposed</b> and <b>production (X)</b> are both flat and symmetric — production's is <code>ratio × 540</code>, independent of width. So the shipped Kotlin already decouples centring from closeness. It differs mainly in having no containment check, and in relaxation <i>narrowing</i> its tolerance; the proposal adds the frame-edge taper.</p>
+            <p class="note"><b>Proposed</b> and <b>production (X)</b> are both flat and symmetric — production's is <code>ratio × 540</code>, independent of width. So the shipped Kotlin already decouples centring from closeness. It differs mainly in having no containment check; the proposal adds the frame-edge taper.</p>
           </div>
         </div>
         <div class="card grow">
@@ -665,11 +676,14 @@
      (540, 768) and a tolerance box the midpoint must sit inside. */
   function stage2dHTML(p) {
     return `
+      <div class="row2d">
+      <div class="ybar" id="${p}YBar" title="allowed cy">
+        <div class="ybar-allow" id="${p}YAllow"></div>
+        <div class="ybar-mark" id="${p}YMark"></div>
+      </div>
       <div class="frame" id="${p}Frame">
         <div class="grid-lines"><span style="left:25%"></span><span style="left:75%"></span></div>
         <div class="tolbox" id="${p}TolBox"></div>
-        <div class="edgetag" id="${p}TagTop"></div>
-        <div class="edgetag" id="${p}TagBottom"></div>
         <div class="tline-v" id="${p}TLineV"></div>
         <div class="tline-h" id="${p}TLineH"></div>
         <div class="erect" id="${p}Erect" tabindex="0" role="slider" aria-label="Eye rectangle position"
@@ -678,17 +692,22 @@
           <span class="handle left" id="${p}HandleL"></span>
           <span class="handle right" id="${p}HandleR"></span>
         </div>
+        <div class="caliper eff" id="${p}CalMax"><span class="cap l"></span><span class="cap r"></span><span class="cl" id="${p}CalMaxLabel"></span></div>
+        <div class="caliper min" id="${p}CalMin"><span class="cap l"></span><span class="cap r"></span><span class="cl" id="${p}CalMinLabel"></span></div>
         <div class="middot" id="${p}MidDot"></div>
       </div>
-      <div class="xbar" id="${p}XBar" title="allowed cx">
-        <div class="xbar-allow" id="${p}XAllow"></div>
-        <div class="xbar-mark" id="${p}XMark"></div>
       </div>
-      <div class="ruler" id="${p}Ruler"></div>
-      <div class="legend">
-        <span><i class="swatch" style="border-color:var(--accent); background:var(--accent-soft)"></i>eyeRect + midpoint</span>
-        <span><i class="swatch" style="border-color:var(--pass); background:var(--band)"></i>allowed cx / cy</span>
-        <span><i class="swatch" style="border-color:var(--muted); background:transparent"></i>target 540, 768</span>
+      <div class="below2d">
+        <div class="xbar" id="${p}XBar" title="allowed cx">
+          <div class="xbar-allow" id="${p}XAllow"></div>
+          <div class="xbar-mark" id="${p}XMark"></div>
+        </div>
+        <div class="ruler" id="${p}Ruler"></div>
+        <div class="legend">
+          <span><i class="swatch" style="border-color:var(--accent); background:var(--accent-soft)"></i>eyeRect + midpoint</span>
+          <span><i class="swatch" style="border-color:var(--pass); background:var(--band)"></i>allowed cx (below) / cy (left)</span>
+          <span><i class="swatch" style="border-color:var(--muted); background:transparent"></i>target 540, 768</span>
+        </div>
       </div>`;
   }
 
@@ -837,20 +856,22 @@
     const xError = (EXP_X - cx) / EXP_X;
     const yError = (EXP_Y - cy) / EXP_Y;
 
-    const rLR = state.dLR * (1 - centreBuffer);
-    const rTop = state.dTop * (1 - centreBuffer);
-    const rBottom = state.dBottom * (1 - centreBuffer);
+    /* (1 + centreBuffer): corrected direction. The shipped Kotlin has (1 − buffer),
+       which narrows a symmetric ± tolerance instead of widening it. */
+    const rLR = state.dLR * (1 + centreBuffer);
+    const rTop = state.dTop * (1 + centreBuffer);
+    const rBottom = state.dBottom * (1 + centreBuffer);
     const minOuter = state.minOuter * (1 - buffer);
     const maxOuter = state.maxOuter * (1 + buffer);
     const avgOuter = w;                       // outer distance ≈ eye-rect width
 
     const xWarn = xError < -rLR ? "RIGHT" : xError > rLR ? "LEFT" : null;
-    const yWarn = yError < -rTop ? "TOP" : yError > rBottom ? "BOTTOM" : null;
+    /* Corrected pairing: yError > 0 means cy is small, i.e. the face sits high, so
+       that is TOP and is governed by rTop. The shipped Kotlin has these swapped. */
+    const yWarn = yError > rTop ? "TOP" : yError < -rBottom ? "BOTTOM" : null;
 
-    /* Inverting the error definitions back into midpoint coordinates: rBottom
-       governs the upper edge (small cy) and rTop the lower edge. */
     const cxLo = EXP_X * (1 - rLR), cxHi = EXP_X * (1 + rLR);
-    const cyLo = EXP_Y * (1 - rBottom), cyHi = EXP_Y * (1 + rTop);
+    const cyLo = EXP_Y * (1 - rTop), cyHi = EXP_Y * (1 + rBottom);
 
     const faceErr = state.noFacePct >= state.faceErrRatio * 100;
     const far = avgOuter <= minOuter, close = avgOuter >= maxOuter;
@@ -873,7 +894,7 @@
           expr: `xError ${xError >= 0 ? "+" : ""}${xError.toFixed(3)} vs ±${rLR.toFixed(3)} rLR` },
         { name: "y location", kind: "warn", fail: !!yWarn, label: yWarn,
           why: `Face off target vertically — flagged ${yWarn}.`,
-          expr: `yError ${yError >= 0 ? "+" : ""}${yError.toFixed(3)} vs −${rTop.toFixed(3)} / +${rBottom.toFixed(3)}` },
+          expr: `yError ${yError >= 0 ? "+" : ""}${yError.toFixed(3)} vs +${rTop.toFixed(3)} / −${rBottom.toFixed(3)}` },
       ],
     };
   }
@@ -1022,14 +1043,6 @@
     box.style.height = pctY(c.cyHi - c.cyLo);
     box.classList.toggle("is-fail", !!c.xWarn || !!c.yWarn);
 
-    /* label which ratio governs each horizontal edge — makes the naming visible */
-    el("pTagTop").style.left = pct(c.cxLo);
-    el("pTagTop").style.top = `calc(${pctY(c.cyLo)} - 12px)`;
-    el("pTagTop").textContent = `rBottom → cy ${Math.round(c.cyLo)}`;
-    el("pTagBottom").style.left = pct(c.cxLo);
-    el("pTagBottom").style.top = pctY(c.cyHi);
-    el("pTagBottom").textContent = `rTop → cy ${Math.round(c.cyHi)}`;
-
     el("pTLineV").style.left = pct(EXP_X);
     el("pTLineH").style.top = pctY(EXP_Y);
 
@@ -1038,12 +1051,34 @@
     dot.style.top = pctY(c.cy);
     dot.classList.toggle("is-fail", !!c.xWarn || !!c.yWarn);
 
+    /* width calipers, centred on the eye box and tracking it down the frame, clamped
+       so both stay inside the frame when the rect sits low */
+    const calTop = Math.min(state.y + state.h + 70, FRAME_H - 260);
+    const placeCalY = (node, width, topUnits) => {
+      node.style.left = pct(c.cx - width / 2);
+      node.style.width = pct(width);
+      node.style.top = pctY(topUnits);
+    };
+    placeCalY(el("pCalMax"), c.maxOuter, calTop);
+    placeCalY(el("pCalMin"), c.minOuter, calTop + 110);
+    el("pCalMax").classList.toggle("is-fail", c.close);
+    el("pCalMin").classList.toggle("is-fail", c.far);
+    el("pCalMaxLabel").textContent = `max ${fmt(round(c.maxOuter))}`;
+    el("pCalMinLabel").textContent = `min ${fmt(round(c.minOuter))}`;
+
     /* X strip: allowed cx span plus where cx currently sits */
     el("pXAllow").style.left = pct(Math.max(0, c.cxLo));
     el("pXAllow").style.width = pct(Math.min(FRAME_W, c.cxHi) - Math.max(0, c.cxLo));
     const xm = el("pXMark");
     xm.style.left = pct(Math.max(0, Math.min(FRAME_W, c.cx)));
     xm.classList.toggle("is-fail", !!c.xWarn);
+
+    /* Y strip on the left edge: allowed cy span plus where cy currently sits */
+    el("pYAllow").style.top = pctY(Math.max(0, c.cyLo));
+    el("pYAllow").style.height = pctY(Math.min(FRAME_H, c.cyHi) - Math.max(0, c.cyLo));
+    const ym = el("pYMark");
+    ym.style.top = pctY(Math.max(0, Math.min(FRAME_H, c.cy)));
+    ym.classList.toggle("is-fail", !!c.yWarn);
 
     el("pMid").textContent = `${fmt(round(c.cx))}, ${fmt(round(c.cy))}`;
     el("pXErr").textContent = `${c.xError >= 0 ? "+" : ""}${c.xError.toFixed(3)}`;
@@ -1060,7 +1095,7 @@
     const tolPx = c.rLR * EXP_X, basePx = state.dLR * EXP_X;
     el("pRelaxNote").innerHTML = !state.relaxOn || state.relaxCentre === 0
       ? `Centring tolerance ±${fmt(round(basePx))} px, unrelaxed.`
-      : `Centring ±${fmt(round(basePx))} → <b>±${fmt(round(tolPx))} px</b> — tightens.`;
+      : `Centring ±${fmt(round(basePx))} → <b>±${fmt(round(tolPx))} px</b> — widens.`;
 
     return { failed: [...errors, ...warns], isFail, isWarn, ledger: c.checks };
   }
@@ -1267,8 +1302,9 @@
     high: { x: 340, y: 440, w: 400, h: 140 },
     right: { x: 500, y: 698, w: 400, h: 140 },
     close: { x: 40, y: 698, w: 1000, h: 140 },
-    /* cx 630: passes unrelaxed, warns once relaxation is on — the inverted buffer */
-    paradox: { x: 430, y: 698, w: 400, h: 140 },
+    /* cx 665, dx +125: outside ±108 unrelaxed, inside ±140.4 once relaxed — shows
+       relaxation working in the correct direction */
+    edge: { x: 465, y: 698, w: 400, h: 140 },
   };
   document.querySelectorAll("[data-preset2]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -1319,8 +1355,15 @@
       /* ruler + legend + gaps; the production stage also carries the X strip */
       const chrome = p === "p" ? 57 : 39;
       const h = Math.max(220, Math.min(avail - chrome, 780));
+      const w = Math.round(h * ASPECT);
       f.style.height = h + "px";
-      f.style.width = Math.round(h * ASPECT) + "px";
+      f.style.width = w + "px";
+      /* the 2D stage puts a strip beside the frame, so the row below it needs an
+         explicit width to stay aligned — fit-content follows the legend instead */
+      const below = document.querySelector("#" + p + "Stage .below2d");
+      if (below) below.style.width = w + "px";
+      const ybar = el(p + "YBar");
+      if (ybar) ybar.style.height = h + "px";
     });
     sizeChart();
   }
@@ -1448,7 +1491,7 @@
 
     /* production X tolerance: ratio × 540, independent of width — a flat pair.
        Same hue as "proposed" because it is the same constant-tolerance family. */
-    const prodTol = state.dLR * (1 - relaxCentreVal()) * EXP_X;
+    const prodTol = state.dLR * (1 + relaxCentreVal()) * EXP_X;
     ctx.save();
     ctx.strokeStyle = pro; ctx.lineWidth = 1.5; ctx.setLineDash([2, 3]);
     [prodTol, -prodTol].forEach((off) => {
@@ -1517,7 +1560,7 @@
       <div class="row"><span class="dot" style="background:${cssVar("--ser-proposed")}"></span>
         proposed ±${Math.round(b.effTol)}</div>
       <div class="row"><span class="dot" style="background:${cssVar("--ser-proposed")}; opacity:.45"></span>
-        production ±${Math.round(state.dLR * (1 - relaxCentreVal()) * EXP_X)}</div>`;
+        production ±${Math.round(state.dLR * (1 + relaxCentreVal()) * EXP_X)}</div>`;
     tip.classList.add("on");
     const tw = tip.offsetWidth, th = tip.offsetHeight;
     tip.style.left = Math.min(Math.max(px - tw / 2, 2), r.width - tw - 2) + "px";
