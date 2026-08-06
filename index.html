@@ -164,6 +164,22 @@
     box-shadow: 0 0 0 2px var(--panel); pointer-events: none;
   }
   .middot.is-fail { background: var(--fail); }
+  /* 1D read-out of the horizontal constraint, so allowed X stays legible even when
+     the midpoint is outside the vertical window and the box no longer lines up */
+  .xbar {
+    position: relative; height: 11px; border-radius: 2px;
+    background: var(--sunken); border: 1px solid var(--rule);
+  }
+  .xbar-allow {
+    position: absolute; top: 0; bottom: 0; background: var(--band);
+    border-left: 1px dashed var(--pass); border-right: 1px dashed var(--pass);
+  }
+  .xbar-mark {
+    position: absolute; top: -3px; bottom: -3px; width: 2px;
+    background: var(--accent); transform: translateX(-1px);
+  }
+  .xbar-mark.is-fail { background: var(--fail); }
+
   .edgetag {
     position: absolute; font-family: var(--mono); font-size: 8px; letter-spacing: .02em;
     color: var(--pass); background: var(--panel); border: 1px solid var(--pass);
@@ -218,8 +234,8 @@
   .ctrl input[type="number"] { width: 74px; font-family: var(--mono); font-size: 11.5px; font-variant-numeric: tabular-nums; text-align: right; padding: 3px 6px; color: var(--ink); background: var(--sunken); border: 1px solid var(--rule); border-radius: 3px; }
   .ctrl input[type="range"] { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); height: 14px; margin: 0; }
   input:focus-visible, button:focus-visible, .erect:focus-visible, .handle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .group { display: flex; flex-direction: column; gap: 8px; }
-  .group + .group { border-top: 1px solid var(--rule); padding-top: 9px; }
+  .group { display: flex; flex-direction: column; gap: 7px; }
+  .group + .group { border-top: 1px solid var(--rule); padding-top: 8px; }
   .group > h3 { font-family: var(--mono); font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
 
   .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -473,14 +489,13 @@
               <span>expectedX = 1080 / 2.0 = 540 · expectedY = 1920 / 2.5 = 768</span>
               <span>xError = (expectedX − eRect_x − eRect_width / 2) / expectedX</span>
               <span>yError = (expectedY − eRect_y − eRect_height / 2) / expectedY</span>
-              <span class="dim">buffer = shouldBeRelaxed ? relaxationRatio : 0</span>
-              <span class="dim">centreBuffer = shouldBeRelaxed ? centreRelaxationRatio : 0</span>
+              <span class="dim">when relaxed: buffer = relaxationRatio, centreBuffer = centreRelaxRatio</span>
               <span class="key">rLR, rTop, rBottom = ratio × (1 − centreBuffer)</span>
               <span>ERROR if avgOuter &lt;= min×(1−buffer) or &gt;= max×(1+buffer)</span>
               <span>xError &lt; −rLR → RIGHT · &gt; rLR → LEFT</span>
               <span>yError &lt; −rTop → TOP · &gt; rBottom → BOTTOM</span>
             </div>
-            <p class="note"><b>Two things look wrong.</b> The offset ratios are multiplied by (1 − centreBuffer), which <i>narrows</i> them, while the distance band correctly widens — setting centreRelaxationRatio to 0 neutralises that, and (1 + b) would actually loosen. And larger cy, meaning lower in frame, is flagged TOP whereas larger cx is flagged RIGHT, so one of the two label sets is inverted.</p>
+            <p class="note"><b>Two things look wrong.</b> (1 − centreBuffer) <i>narrows</i> the offset ratios while the distance band correctly widens; set centreRelaxRatio to 0 to neutralise, or (1 + b) to loosen. And larger cy — lower in frame — is flagged TOP while larger cx is flagged RIGHT, so one label set is inverted.</p>
           </div>
         </div>
       </div>
@@ -665,10 +680,14 @@
         </div>
         <div class="middot" id="${p}MidDot"></div>
       </div>
+      <div class="xbar" id="${p}XBar" title="allowed cx">
+        <div class="xbar-allow" id="${p}XAllow"></div>
+        <div class="xbar-mark" id="${p}XMark"></div>
+      </div>
       <div class="ruler" id="${p}Ruler"></div>
       <div class="legend">
         <span><i class="swatch" style="border-color:var(--accent); background:var(--accent-soft)"></i>eyeRect + midpoint</span>
-        <span><i class="swatch" style="border-color:var(--pass); background:var(--band)"></i>midpoint must sit here</span>
+        <span><i class="swatch" style="border-color:var(--pass); background:var(--band)"></i>allowed cx / cy</span>
         <span><i class="swatch" style="border-color:var(--muted); background:transparent"></i>target 540, 768</span>
       </div>`;
   }
@@ -732,16 +751,12 @@
       <span class="meta"><span>shouldBeRelaxed</span><small id="pRelaxState">On — applying 0.30</small></span>
       <button class="toggle" id="pRelaxToggle" aria-pressed="true" aria-label="Enable relaxation"></button>
     </div>
-    <label class="ctrl">
-      <span class="label">relaxationRatio <i>distances</i></span>
-      <input type="number" id="pNumRelax" min="0" max="1" step="0.05" value="0.3">
-      <input type="range" id="pRngRelax" min="0" max="1" step="0.05" value="0.3" aria-label="relaxationRatio for distances">
-    </label>
-    <label class="ctrl">
-      <span class="label">centreRelaxationRatio <i>offsets</i></span>
-      <input type="number" id="pNumRelaxC" min="0" max="1" step="0.05" value="0.3">
-      <input type="range" id="pRngRelaxC" min="0" max="1" step="0.05" value="0.3" aria-label="centreRelaxationRatio for offsets">
-    </label>
+    <div class="grid2">
+      <label><span>relaxationRatio <i style="font-style:normal;color:var(--muted)">dist</i></span>
+        <input type="number" id="pNumRelax" min="0" max="1" step="0.05" value="0.3"></label>
+      <label><span>centreRelaxRatio <i style="font-style:normal;color:var(--muted)">offs</i></span>
+        <input type="number" id="pNumRelaxC" min="0" max="1" step="0.05" value="0.3"></label>
+    </div>
     <p class="note" id="pRelaxNote"></p>`;
 
   el("aRelaxGroup").innerHTML = relaxGroupHTML("a");
@@ -1023,6 +1038,13 @@
     dot.style.top = pctY(c.cy);
     dot.classList.toggle("is-fail", !!c.xWarn || !!c.yWarn);
 
+    /* X strip: allowed cx span plus where cx currently sits */
+    el("pXAllow").style.left = pct(Math.max(0, c.cxLo));
+    el("pXAllow").style.width = pct(Math.min(FRAME_W, c.cxHi) - Math.max(0, c.cxLo));
+    const xm = el("pXMark");
+    xm.style.left = pct(Math.max(0, Math.min(FRAME_W, c.cx)));
+    xm.classList.toggle("is-fail", !!c.xWarn);
+
     el("pMid").textContent = `${fmt(round(c.cx))}, ${fmt(round(c.cy))}`;
     el("pXErr").textContent = `${c.xError >= 0 ? "+" : ""}${c.xError.toFixed(3)}`;
     el("pYErr").textContent = `${c.yError >= 0 ? "+" : ""}${c.yError.toFixed(3)}`;
@@ -1037,8 +1059,8 @@
     /* centring tolerance in px, so the direction of the effect is unmissable */
     const tolPx = c.rLR * EXP_X, basePx = state.dLR * EXP_X;
     el("pRelaxNote").innerHTML = !state.relaxOn || state.relaxCentre === 0
-      ? `Centring unaffected: tolerance stays ±${fmt(round(basePx))} px.`
-      : `Centring tolerance ±${fmt(round(basePx))} → <b>±${fmt(round(tolPx))} px</b> — still (1 − ratio), so it <b>tightens</b>. Set 0 to neutralise.`;
+      ? `Centring tolerance ±${fmt(round(basePx))} px, unrelaxed.`
+      : `Centring ±${fmt(round(basePx))} → <b>±${fmt(round(tolPx))} px</b> — tightens.`;
 
     return { failed: [...errors, ...warns], isFail, isWarn, ledger: c.checks };
   }
@@ -1133,8 +1155,8 @@
   bind("dBottom", [["numDBottom", "rngDBottom"]]);
   bind("faceErrRatio", [["numFaceErr", null]]);
   bind("noFacePct", [["numNoFace", null]]);
-  bind("relax", [["aNumRelax", "aRngRelax"], ["bNumRelax", "bRngRelax"], ["pNumRelax", "pRngRelax"]]);
-  bind("relaxCentre", [["pNumRelaxC", "pRngRelaxC"]]);
+  bind("relax", [["aNumRelax", "aRngRelax"], ["bNumRelax", "bRngRelax"], ["pNumRelax", null]]);
+  bind("relaxCentre", [["pNumRelaxC", null]]);
   const setX = bind("x", [["aNumX", "aRngX"], ["bNumX", "bRngX"], ["pNumX", null]]);
   const setW = bind("w", [["aNumW", "aRngW"], ["bNumW", "bRngW"], ["pNumW", null]]);
   const setY = bind("y", [["pNumY", null]]);
@@ -1294,7 +1316,9 @@
       const f = el(p + "Frame");
       if (narrow) { f.style.height = ""; f.style.width = ""; return; }
       if (avail < 40) return;
-      const h = Math.max(220, Math.min(avail - 39, 780));
+      /* ruler + legend + gaps; the production stage also carries the X strip */
+      const chrome = p === "p" ? 57 : 39;
+      const h = Math.max(220, Math.min(avail - chrome, 780));
       f.style.height = h + "px";
       f.style.width = Math.round(h * ASPECT) + "px";
     });
