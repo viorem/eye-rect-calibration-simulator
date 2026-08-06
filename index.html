@@ -120,6 +120,22 @@
   .band.policy { background: none; border-left: 1px dotted var(--muted); border-right: 1px dotted var(--muted); }
   .center-line { position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: var(--muted); opacity: .5; }
 
+  /* Indicative head outline, scaled off the eye rect with rough adult proportions:
+     head ≈ 1.6× outer-eye width, ≈ 2.5× tall, eye line ≈ 46% down from the crown.
+     Clipped by the frame, so "too close" reads as a head overflowing the view. */
+  .face {
+    position: absolute; color: var(--muted);
+    border: 1px solid currentColor; border-radius: 50% / 46%;
+    opacity: .55; pointer-events: none;
+  }
+  .face.is-fail { color: var(--fail); opacity: .7; }
+  .face::before, .face::after {
+    content: ""; position: absolute; top: 38%; width: 8%; height: 15%;
+    border: 1px solid currentColor; opacity: .9;
+  }
+  .face::before { left: -5%; border-right: none; border-radius: 70% 0 0 70%; }
+  .face::after { right: -5%; border-left: none; border-radius: 0 70% 70% 0; }
+
   .erect { position: absolute; border: 2px solid var(--accent); background: var(--accent-soft); color: var(--accent); cursor: grab; display: flex; align-items: center; justify-content: center; }
   .erect.is-fail { border-color: var(--fail); background: var(--fail-soft); color: var(--fail); }
   .erect.dragging { cursor: grabbing; }
@@ -504,9 +520,9 @@
               <span class="dim">when relaxed: buffer = relaxationRatio, centreBuffer = centreRelaxRatio</span>
               <span class="key">rLR, rTop, rBottom = ratio × (1 + centreBuffer)</span>
               <span>ERROR if avgOuter &lt;= min×(1−buffer) or &gt;= max×(1+buffer)</span>
-              <span class="key">xError &lt; −rLR → RIGHT · &gt; rLR → LEFT · yError &gt; rTop → TOP · &lt; −rBottom → BOTTOM</span>
+              <span>xError &lt; −rLR → RIGHT · &gt; rLR → LEFT</span>
+              <span>yError &gt; rTop → TOP · &lt; −rBottom → BOTTOM</span>
             </div>
-            <p class="note"><b>Two corrections vs the shipped Kotlin</b>, both highlighted. Offsets scale by <b>(1 + centreBuffer)</b>, not (1 − buffer): a symmetric ± tolerance must scale up to widen, while the distance band was already right because its ends move in opposite directions. And the <b>Y branches are swapped</b> — yError is positive when cy is small, i.e. the face is high, so that case is TOP and takes rTop; the shipped code fires TOP on a <i>low</i> face. X was already consistent.</p>
           </div>
         </div>
       </div>
@@ -535,12 +551,10 @@
             </div>
 
             <div class="group">
-              <h3>Distance &amp; detection</h3>
+              <h3>Distance <i style="font-style:normal;color:var(--muted)">· avgOuter ≈ eRect_width</i></h3>
               <div class="grid2">
                 <label><span>minOuterDistance</span><input type="number" id="numMinOuter3" min="20" max="1080" step="1" value="250"></label>
                 <label><span>maxOuterDistance</span><input type="number" id="numOuter3" min="50" max="1080" step="1" value="750"></label>
-                <label><span>faceErrThreshRatio</span><input type="number" id="numFaceErr" min="0" max="1" step="0.01" value="0.2"></label>
-                <label><span>no-face frames %</span><input type="number" id="numNoFace" min="0" max="100" step="1" value="5"></label>
               </div>
             </div>
 
@@ -634,8 +648,6 @@
     dLR: 0.2,               // maxOffsetLeftRightRatio
     dTop: 0.2,              // maxOffsetTopRatio
     dBottom: 0.2,           // maxOffsetBottomRatio
-    faceErrRatio: 0.2,      // faceErrorThresholdRatio
-    noFacePct: 5,           // simulated getPercentOfIndex(NO_FACE_FOUND)
     /* Centring gets its own magnitude, gated by the same shouldBeRelaxed flag.
        Defaults to relaxationRatio so tab C still mirrors the shipped behaviour. */
     relaxCentre: 0.3,
@@ -659,6 +671,7 @@
         <div class="band" id="${p}Band"></div>
         <div class="center-line" id="${p}CentreLine"></div>
         ${opts.midpoint ? `<div class="bandlabel" id="${p}BandLabel"></div><div class="dxbar" id="${p}DxBar"></div><div class="dxlabel" id="${p}DxLabel"></div><div class="ctick" id="${p}Ctick"></div>` : ""}
+        <div class="face" id="${p}Face"></div>
         <div class="erect" id="${p}Erect" tabindex="0" role="slider" aria-label="Eye rectangle horizontal position"
              aria-valuemin="0" aria-valuemax="1080" aria-valuenow="340">
           <span class="tag" id="${p}Tag"></span>
@@ -686,6 +699,7 @@
         <div class="tolbox" id="${p}TolBox"></div>
         <div class="tline-v" id="${p}TLineV"></div>
         <div class="tline-h" id="${p}TLineH"></div>
+        <div class="face" id="${p}Face"></div>
         <div class="erect" id="${p}Erect" tabindex="0" role="slider" aria-label="Eye rectangle position"
              aria-valuemin="0" aria-valuemax="1080" aria-valuenow="340">
           <span class="tag" id="${p}Tag"></span>
@@ -873,16 +887,12 @@
     const cxLo = EXP_X * (1 - rLR), cxHi = EXP_X * (1 + rLR);
     const cyLo = EXP_Y * (1 - rTop), cyHi = EXP_Y * (1 + rBottom);
 
-    const faceErr = state.noFacePct >= state.faceErrRatio * 100;
     const far = avgOuter <= minOuter, close = avgOuter >= maxOuter;
 
     return {
       cx, cy, xError, yError, rLR, rTop, rBottom, minOuter, maxOuter, avgOuter,
-      xWarn, yWarn, cxLo, cxHi, cyLo, cyHi, faceErr, far, close,
+      xWarn, yWarn, cxLo, cxHi, cyLo, cyHi, far, close,
       checks: [
-        { name: "face found", kind: "error", fail: faceErr,
-          why: "Too many frames with no face detected.",
-          expr: `noFace ${fmt(round(state.noFacePct))}% ${faceErr ? "≥" : "<"} ${fmt(round(state.faceErrRatio * 100))}% threshold` },
         { name: "distance far", kind: "error", fail: far,
           why: "Face too far away.",
           expr: `avgOuter ${fmt(round(avgOuter))} ${far ? "≤" : ">"} ${fmt(round(minOuter))} minOuter` },
@@ -913,6 +923,18 @@
     f.classList.toggle("is-fail", isFail);
     f.classList.toggle("is-pass", !isFail);
   }
+  /* cx, cy and the eye-rect width are enough to place an indicative head */
+  function paintFace(id, cx, cy, w, fail) {
+    const headW = w * 1.6, headH = w * 2.5;
+    const node = el(id);
+    if (!node) return;
+    node.style.left = pct(cx - headW / 2);
+    node.style.width = pct(headW);
+    node.style.top = pctY(cy - headH * 0.46);
+    node.style.height = pctY(headH);
+    node.classList.toggle("is-fail", !!fail);
+  }
+
   function placeCaliper(node, centre, width, top) {
     node.style.left = pct(centre - width / 2);
     node.style.width = pct(width);
@@ -929,6 +951,7 @@
     const failed = c.checks.filter((k) => k.fail);
     const isFail = failed.length > 0;
     paintErect("a", isFail, `w ${Math.round(state.w)} · x ${Math.round(state.x)}`);
+    paintFace("aFace", state.x + state.w / 2, AB_CY, state.w, isFail);
 
     placeBand(el("aBand"), c.minX, c.maxX);
     el("aDeadL").style.left = "0";
@@ -975,6 +998,7 @@
     const isFail = failed.length > 0;
     const sign = c.dx > 0 ? "+" : "";
     paintErect("b", isFail, `w ${Math.round(state.w)} · dx ${sign}${Math.round(c.dx)}`);
+    paintFace("bFace", c.c, AB_CY, state.w, isFail);
 
     placeBand(el("bBandPolicy"), CENTRE - c.policyTol, CENTRE + c.policyTol);
     placeBand(el("bBand"), c.winLo, c.winHi);
@@ -1015,6 +1039,8 @@
   }
 
   const pctY = (v) => (v / FRAME_H * 100) + "%";
+  /* tabs A and B pin the rect at a fixed height, so their head sits at that midline */
+  const AB_CY = (0.26 + 0.065 / 2) * FRAME_H;
 
   function renderP() {
     const c = computeP();
@@ -1031,6 +1057,7 @@
     e.classList.toggle("is-fail", isFail || isWarn);
     e.setAttribute("aria-valuenow", Math.round(state.x));
     el("pTag").textContent = `${Math.round(state.w)} × ${Math.round(state.h)}`;
+    paintFace("pFace", c.cx, c.cy, state.w, isFail || isWarn);
 
     const f = el("pFrame");
     f.classList.toggle("is-fail", isFail || isWarn);
@@ -1188,8 +1215,6 @@
   bind("dLR", [["numDLR", "rngDLR"]]);
   bind("dTop", [["numDTop", "rngDTop"]]);
   bind("dBottom", [["numDBottom", "rngDBottom"]]);
-  bind("faceErrRatio", [["numFaceErr", null]]);
-  bind("noFacePct", [["numNoFace", null]]);
   bind("relax", [["aNumRelax", "aRngRelax"], ["bNumRelax", "bRngRelax"], ["pNumRelax", null]]);
   bind("relaxCentre", [["pNumRelaxC", null]]);
   const setX = bind("x", [["aNumX", "aRngX"], ["bNumX", "bRngX"], ["pNumX", null]]);

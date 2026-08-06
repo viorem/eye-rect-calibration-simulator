@@ -76,7 +76,6 @@ minOuter = minOuterDistance × (1 − buffer)
 maxOuter = maxOuterDistance × (1 + buffer)
 rLR, rTop, rBottom = ratio × (1 + centreBuffer)      // corrected, see below
 
-ERROR if noFacePercent >= faceErrorThresholdRatio × 100
 ERROR if avgOuterDistance <= minOuter   (too far)
 ERROR if avgOuterDistance >= maxOuter   (too close)
 xError < −rLR      → RIGHT     xError > rLR     → LEFT
@@ -106,6 +105,12 @@ The stage reads both axes off the edges rather than labelling them inside the fr
 allowed `cx` on the strip **below** the frame, allowed `cy` on the strip to its
 **left**, and `minOuterDistance` / `maxOuterDistance` as caliper lines under the eye
 rect, which track it as it moves.
+
+An indicative head outline is drawn around the eye rect on every rule tab — 1.6×
+the eye-rect width, 2.5× tall, eye line 46% down from the crown. It is decoration
+for reading the geometry, not part of any check; the frame clips it, so "too close"
+shows as a head overflowing the view. Note the check is a frame-by-frame one, so the
+aggregate `faceErrorThresholdRatio` / no-face-percentage gate is not modelled here.
 
 ## Deploying
 
